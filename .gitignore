@@ -1,0 +1,17 @@
+# 运行时产物 / 本机专用（不入库）
+node_modules/
+pet-input.log
+*.log
+
+# 桌宠窗状态与 rendezvous（宿主运行时生成）
+.dsh/
+
+# 临时渲染/调试产物
+*.tmp.svg
+_ns-*.svg
+_ns-*.png
+_acl-recovery/
+
+# OS
+.DS_Store
+Thumbs.db

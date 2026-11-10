@@ -1,0 +1,11 @@
+# dsh-blob-pet —— DSH bundle patch
+#
+# 安装（本地开发，link 到源码目录）：
+#   dsh plugin --profile desktop add "link:D:/工作区/dsh-blob-pet"
+# 卸载：
+#   dsh plugin --profile desktop remove dsh-blob-pet
+#
+# ⚠️ insert 的 name 必须与包名完全一致，否则宿主找不到模块。
+- insert:
+    - id: dsh-blob-pet
+      name: dsh-blob-pet

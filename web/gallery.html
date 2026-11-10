@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DSH 桌宠动作图鉴 · grok-icon-study 引擎全状态</title>
+<style>
+  :root{--fg:#16171a;--bg:#f4f2ee;--card:#fff;--line:rgba(0,0,0,.1);--dim:#8d877b;--acc:#1d9bf0}
+  html.dark{--fg:#e9eaee;--bg:#17181c;--card:#232428;--line:rgba(255,255,255,.12);--dim:#9aa0a6}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,"Segoe UI",sans-serif}
+  header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:12px 18px;
+    display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  h1{font-size:16px;margin:0 12px 0 0}
+  select,button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);
+    border-radius:8px;padding:5px 10px;cursor:pointer}
+  button:hover{border-color:var(--acc)}
+  .tag{font-size:11px;color:var(--dim)}
+  #stage-wrap{display:flex;justify-content:center;padding:18px;gap:22px;align-items:center;flex-wrap:wrap}
+  #stage{width:220px;height:220px;background:var(--card);border:1px solid var(--line);border-radius:16px;
+    display:flex;align-items:center;justify-content:center;position:relative}
+  #stage svg{width:190px;height:190px}
+  #stage-info{min-width:220px;max-width:420px}
+  #stage-info .name{font-size:22px;font-weight:700}
+  #stage-info .row{margin-top:6px;color:var(--dim);font-size:12px}
+  #tray{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 26px;justify-content:center}
+  .cell{width:118px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:6px;cursor:pointer;text-align:center;transition:transform .12s}
+  .cell:hover{transform:translateY(-3px);border-color:var(--acc)}
+  .cell.active{outline:2px solid var(--acc)}
+  .cell svg{width:96px;height:96px;display:block;margin:0 auto}
+  .cell .lbl{font-size:11px;font-weight:600;margin-top:2px}
+  .cell .fx{font-size:10px;color:var(--acc);min-height:14px}
+  h2.grp{width:100%;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);
+    margin:14px 0 2px;text-align:center;font-weight:600}
+  footer{text-align:center;color:var(--dim);font-size:11px;padding:10px 0 30px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🖤 桌宠动作图鉴</h1>
+  <label class="tag">身形 <select id="shape"></select></label>
+  <label class="tag">配色 <select id="color"></select></label>
+  <label class="tag">大小 <select id="size"><option value="96">小</option><option value="120" selected>中</option><option value="150">大</option></select></label>
+  <button id="trick-spin">转圈 spin</button>
+  <button id="trick-bounce">弹跳 bounce</button>
+  <button id="trick-burst">粒子 burst</button>
+  <button id="trick-all">三连全演</button>
+  <button id="tour">▶ 自动巡演</button>
+  <button id="pause">⏸ 全暂停</button>
+  <button id="theme">◐ 深/浅</button>
+  <span class="tag">点卡片 = 上方大舞台演该状态；trick 只作用大舞台</span>
+</header>
+
+<div id="stage-wrap">
+  <div id="stage"><svg id="stage-svg" role="img" aria-label="预览"></svg></div>
+  <div id="stage-info">
+    <div class="name" id="st-name">idle</div>
+    <div class="row" id="st-eyes"></div>
+    <div class="row" id="st-meta"></div>
+    <div class="row" id="st-live"></div>
+  </div>
+</div>
+
+<div id="tray"></div>
+<footer>引擎：blessonism/grok-icon-study 复刻实现（原样） · 素材归 xAI/权利人 · 仅本机学习使用 · dsh-blob-pet</footer>
+
+<script src="grok/geometry-data.js"></script>
+<script src="grok/math.js"></script>
+<script src="grok/tables.js"></script>
+<script src="grok/pose.js"></script>
+<script src="grok/tricks.js"></script>
+<script src="grok/fx.js"></script>
+<script src="grok/eyes.js"></script>
+<script src="grok/character.js"></script>
+<script>
+(function () {
+  if (typeof GrokCharacter !== 'function') { document.body.textContent = '引擎加载失败：请用本机 DSH 端口打开本页'; return }
+  const META = window.GROK_META, GEO = window.GROK_GEO
+  const tray = document.getElementById('tray')
+
+  // 深/浅
+  let dark = matchMedia('(prefers-color-scheme: dark)').matches
+  function applyTheme() { document.documentElement.classList.toggle('dark', dark) }
+  applyTheme()
+  document.getElementById('theme').onclick = () => { dark = !dark; applyTheme(); syncScheme() }
+
+  // 下拉：18 身形 × 11 配色（全部来自他的 geometry-data）
+  const shapeSel = document.getElementById('shape'), colorSel = document.getElementById('color')
+  Object.keys(GEO.shapes).forEach(k => shapeSel.appendChild(new Option(GEO.shapes[k].label || k, k)))
+  Object.keys(GEO.palette || {}).forEach(k => colorSel.appendChild(new Option(k, k)))
+  shapeSel.value = 'blob'; if (!colorSel.querySelector('[value=black]')) colorSel.appendChild(new Option('black', 'black')); colorSel.value = 'black'
+  let cellPx = 120
+
+  // 大舞台
+  const stageBot = new GrokCharacter(document.getElementById('stage-svg'), {
+    shape: 'blob', color: 'black', scheme: dark ? 'dark' : 'light', mode: 'hold', state: 'idle',
+    loginWrap: true, followPointer: false, sizePx: 190,
+    onChange(s) {
+      document.getElementById('st-live').textContent =
+        `live: ${s.state} · eye ${s.eyeFrom}→${s.eyeTo} · spin ${s.spin.toFixed(1)}° · squash ${s.squash.toFixed(3)}${s.overlay ? ' · overlay ' + s.overlay : ''}`
+    },
+  })
+
+  // 39 状态卡片（按他 GROUPS 的 4 组分组）
+  const bots = [stageBot]
+  let cellBots = []
+  function buildTray() {
+    cellBots.forEach(b => { try { b.destroy() } catch {} })
+    bots.length = 1 // 只留 stageBot
+    tray.innerHTML = ''
+    cellBots = []
+    META.groups.forEach(g => {
+      const h = document.createElement('h2'); h.className = 'grp'; h.textContent = g.label; tray.appendChild(h)
+      g.states.forEach(name => {
+        const cell = document.createElement('div'); cell.className = 'cell'
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+        cell.appendChild(svg)
+        const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = name; cell.appendChild(lbl)
+        const fx = document.createElement('div'); fx.className = 'fx'
+        const ov = (META.overlays || {})[name]; if (ov) fx.textContent = '✦ ' + ov
+        cell.appendChild(fx)
+        const b = new GrokCharacter(svg, {
+          shape: shapeSel.value, color: colorSel.value, scheme: dark ? 'dark' : 'light',
+          mode: 'hold', state: name, loginWrap: true, followPointer: false, sizePx: cellPx, paused: false,
+        })
+        b.galleryState = name
+        cellBots.push(b); bots.push(b)
+        cell.onclick = () => {
+          document.querySelectorAll('.cell.active').forEach(c => c.classList.remove('active'))
+          cell.classList.add('active')
+          stageBot.setMode('hold'); stageBot.setState(name, { resetEyes: true })
+          document.getElementById('st-name').textContent = name
+          const pl = META.eyePlaylist[name] || []
+          document.getElementById('st-eyes').textContent = '眼表 ' + JSON.stringify(pl) + (ov ? ' · overlay: ' + ov : '')
+        }
+        tray.appendChild(cell)
+      })
+    })
+  }
+  buildTray()
+  document.getElementById('st-eyes').textContent = '点任意卡片开始'
+
+  function syncScheme() {
+    const sch = dark ? 'dark' : 'light'
+    bots.forEach(b => { b.setColor(colorSel.value, sch) })
+  }
+  shapeSel.onchange = () => cellBots.forEach(b => b.setShape(shapeSel.value))
+  colorSel.onchange = syncScheme
+  document.getElementById('size').onchange = (e) => { cellPx = Number(e.target.value); buildTray(); }
+
+  // tricks：只作用大舞台（他 character.js 的公开 API）
+  document.getElementById('trick-spin').onclick = () => stageBot.spinOnce(1)
+  document.getElementById('trick-bounce').onclick = () => stageBot.bounceOnce()
+  document.getElementById('trick-burst').onclick = () => stageBot.burstOnce()
+  document.getElementById('trick-all').onclick = () => {
+    stageBot.bounceOnce()
+    setTimeout(() => stageBot.spinOnce(1), 500)
+    setTimeout(() => stageBot.burstOnce(), 1400)
+  }
+
+  // 自动巡演：按 his GROUPS 顺序逐状态在大舞台停 2.8s
+  let tourTimer = null, tourIdx = -1
+  const ORDER = META.groups.flatMap(g => g.states)
+  document.getElementById('tour').onclick = (e) => {
+    if (tourTimer) { clearInterval(tourTimer); tourTimer = null; e.target.textContent = '▶ 自动巡演'; return }
+    e.target.textContent = '⏹ 停止巡演'
+    const step = () => {
+      tourIdx = (tourIdx + 1) % ORDER.length
+      const name = ORDER[tourIdx]
+      stageBot.setMode('hold'); stageBot.setState(name, { resetEyes: true })
+      document.getElementById('st-name').textContent = name
+      const pl = META.eyePlaylist[name] || []
+      const ov = (META.overlays || {})[name]
+      document.getElementById('st-eyes').textContent = '眼表 ' + JSON.stringify(pl) + (ov ? ' · overlay: ' + ov : '')
+    }
+    step(); tourTimer = setInterval(step, 2800)
+  }
+
+  // 全暂停/继续
+  let paused = false
+  document.getElementById('pause').onclick = (e) => {
+    paused = !paused
+    bots.forEach(b => b.setPaused && b.setPaused(paused))
+    e.target.textContent = paused ? '▶ 全继续' : '⏸ 全暂停'
+  }
+
+})()
+</script>
+</body>
+</html>
