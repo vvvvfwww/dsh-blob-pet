@@ -72,6 +72,7 @@
     shape: [10, 1],
     overlayTurn: [14, 1],
     spinTurn: [6.2, 1],
+    manualMix: [7, 1],
   };
 
   const FACE_TUNE = { size: 0.86, gap: 1.18, height: 1, eyeWidth: 0.96, eyeHeight: 0.92 };

@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.7.0（2026-11-12）— 引擎跟进 grok-icon-study web 分支 + 三样加料
+- 引擎整体升级到上游 `web` 分支（d764946，15 个提交）：character.js 857→1446 行、
+  eyes.js 218→424、pose.js 409→411、tables.js +1、fx.js +1（math/tricks/geometry-data 逐字节未变，
+  25 眼 / 18 身形 / 11 色 / 39 状态表原样）。
+  新增 16 个公开 API：step / flushPerformance / freezeNow / holdFrame / orbitGaze / parts /
+  playback / seekEye / setAutoTricks / setEyeTune / setInkGrad / setManualHold / setManualOffset /
+  setPlaylistHold / setPose / setSize；构造项新增 driven（外部时钟、可离线逐帧）、geo/playlist 注入、
+  frameHalf / fitBox / scheme。_paint 每帧按 shrink/zoom 写 svg viewBox（overlay 缩放按实际像素收敛），
+  eyes.js 新增单眼微调 + 四元数头部投影，pose.js 支持 extra.prev（任意帧 seek 不跳变）。
+- 重打 keepBody 补丁（character.js:148 / 1295-1302）：不补则 overlay 状态身体缩成粒子环，
+  QtSvg 序列化后塌成小黑点（0.6.0 的坑）。
+- pose.js 补回自定义三连 singing / dancing / giggle 的 case（上游没有这三个）。
+- 加料① 滚轮调大小：网页端 60–200px，记不住会污染仓库，存 localStorage `dsh-blob-pet-size`；
+  原生窗沿用 90–420px + ~/.dsh/blob-pet-view.json。
+- 加料② 捏团子：拖拽时按位移喂 setManualOffset（tx/ty 上限 30、spin 上限 26，随尺寸反比缩放），
+  松手 setManualHold(false)，偏移由 manualMix 弹簧收回。
+- 加料③ 主题渐变：setInkGrad 跟随浅/深色（浅 #0a0b0d→#43464e，深 #101116→#6d7279，angle 0）。
+  网页端每 4s 复查主题，原生桥在 scheme 切换时同步；QtSvg 实测顶部亮度 55 / 底部 33，渐变可见。
+- 回归：smoke 39 状态全过；native-smoke 154 帧 + QtSvg 三帧非空 + py AST OK；host-test 全绿；
+  原生逐帧身体覆盖率 旧 1210–1311 / 新 1214–1308（keepBody 有效，无塌缩）。
+- 已知差异：网页端 90px 因 sizePx<120 走 fitBox 分支、不再加 CSS scale(1.04)，比旧版小约 4%；
+  原生窗不传 sizePx 走老路径，尺寸与之前一致。
+- 备份：升级前的旧引擎留在 .bak-engine-061/（未入库）。VERSION bump 0.6.1 → 0.7.0。
+
 ## 0.6.1（2026-11-11）— 彻底移除独立窗 + 引擎创建回归修复
 - 移除浏览器 --app 独立小窗（B 套）：删 web/standalone.html、删 lib/index.js 的
   /standalone 路由 + sidecar /events SSE 订阅（sbClients）+ bundleDoc standalone 参数；

@@ -15,3 +15,6 @@ _acl-recovery/
 # OS
 .DS_Store
 Thumbs.db
+
+# 引擎升级前的旧版本备份（本地回滚用）
+.bak-engine-061/

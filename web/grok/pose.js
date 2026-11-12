@@ -5,9 +5,10 @@
 
   function applyPose(state, mt, dtState, now, ctx, extra = {}) {
     const pt = 0;
+    const prev = extra.prev || { spin: pt, tx: 0, ty: 0, squash: 1 };
+    let { spin, tx, ty, squash } = prev;
     let lid = 1;
     let eyeBoost = 1;
-    let spin = pt, tx = 0, ty = 0, squash = 1;
 
     switch (state) {
       // —— 升级包自定义状态（singing / dancing / giggle）——
@@ -44,7 +45,8 @@
         tx = -2 * En;
         ty = 8 * En + Math.sin(mt * 0.55) * 3 - Zt * 5;
         squash = 1 + Math.sin(mt * 0.55) * 0.016 + Zt * 0.05;
-        if (EYE_PLAYLIST.sleeping.includes(extra.eyeTo)) {
+        const sleepEyes = extra.playlist?.sleeping || EYE_PLAYLIST.sleeping;
+        if (sleepEyes.includes(extra.eyeTo)) {
           lid = extra.eyeMorphX > 0.85 ? 1 : 0.08;
         } else if (dtState < 1.2) {
           const dn = Math.min(1, dtState / 1);

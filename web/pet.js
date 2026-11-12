@@ -18,6 +18,19 @@
 
   const NS = 'http://www.w3.org/2000/svg'
 
+  // ————— 尺寸：滚轮缩放，跟桌面窗一样记住上次 —————
+  const SIZE_KEY = 'dsh-blob-pet-size'
+  const SIZE_MIN = 60
+  const SIZE_MAX = 200
+  function readSize() {
+    try {
+      const n = Number(localStorage.getItem(SIZE_KEY))
+      if (Number.isFinite(n) && n > 0) return Math.min(SIZE_MAX, Math.max(SIZE_MIN, Math.round(n)))
+    } catch {}
+    return 90
+  }
+  let sizePx = readSize()
+
   // ————— 样式与容器（GUI 页注入模式） —————
   const style = document.createElement('style')
   style.textContent = `
@@ -94,11 +107,35 @@
       state: 'idle',
       loginWrap: true,
       followPointer: true,   // README：源码默认关，预览默认开——桌宠开
-      sizePx: 90,
+      sizePx,
       onChange(snap) { lastState = snap.state },
     })
     window.__blobBot = bot   // 调试入口
     let lastState = 'idle'
+
+    // ————— 主题渐变：身体从下方墨色过渡到上方柔光，跟着浅/深色切 —————
+    const inkFor = (s) => s === 'dark'
+      ? { from: '#101116', to: '#6d7279', angle: 0 }
+      : { from: '#0a0b0d', to: '#43464e', angle: 0 }
+    bot.setInkGrad(inkFor(scheme))
+    let lastScheme = scheme
+    setInterval(() => {
+      const s = applySchemeVars()
+      if (s === lastScheme) return
+      lastScheme = s
+      bot.setColor('black', s)
+      bot.setInkGrad(inkFor(s))
+    }, 4000)
+
+    // ————— 滚轮调大小（60–200px）—————
+    box.addEventListener('wheel', (e) => {
+      if (!e.deltaY) return
+      e.preventDefault()
+      sizePx = Math.min(SIZE_MAX, Math.max(SIZE_MIN, sizePx + (e.deltaY < 0 ? 10 : -10)))
+      bot.setSize(sizePx)
+      try { localStorage.setItem(SIZE_KEY, String(sizePx)) } catch {}
+      setLabel(`${sizePx}px`, 1200)
+    }, { passive: false })
 
     // ————— 状态映射：agent 活动 → 引擎全部 39 状态面 —————
     // 工具名 → 他的状态 + 中文气泡词。每个都对应他 tables/fx 里的真实条目。
@@ -275,9 +312,19 @@
         bot.setMode('hold')
         bot.setState('dragging', { resetEyes: false })               // 他的拖拽态（3→15→0 眼）
         setLabel('', 0)
+        // 捏团子：身体跟手慢半拍（往反方向滞后）+ 略微倾斜，松手由弹簧收回
+        const soft = 90 / sizePx
+        const cap = (v, m) => Math.max(-m, Math.min(m, v))
+        bot.setManualHold(true)
+        bot.setManualOffset({
+          tx: cap(-dx * 0.35 * soft, 30),
+          ty: cap(-dy * 0.35 * soft, 30),
+          spin: cap(-dx * 0.7 * soft, 26),
+        })
       }
     })
     box.addEventListener('pointerup', () => {
+      bot.setManualHold(false)   // 松手：捏住的偏移按弹簧收回
       if (drag && !drag.moved) {
         wakeIfNeeded()
         const mood = PET_MOODS[(petSeq++) % PET_MOODS.length]

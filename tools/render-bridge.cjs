@@ -129,6 +129,11 @@ const bot = new win.GrokCharacter(svg, {
   // QtSvg 无浏览器粒子 overlay：overlay 激活时身体会缩成粒子环比例（小黑点）。
   keepBody: true,
 })
+// 主题渐变：与网页版同一套（身体从下方墨色过渡到上方柔光）
+const inkFor = (sc) => sc === 'dark'
+  ? { from: '#101116', to: '#6d7279', angle: 0 }
+  : { from: '#0a0b0d', to: '#43464e', angle: 0 }
+bot.setInkGrad(inkFor(scheme))
 function vars() {
   const s = svg.style._map || {}
   const raw = { '--fg': s['--fg'] || '#000', '--ink': s['--ink'] || '#fff', '--bg': s['--bg'] || '#fff' }
@@ -275,6 +280,7 @@ function cmd(c) {
   } else if (c.cmd === 'scheme' && c.value !== scheme) {
     scheme = c.value
     bot.setColor(bot.colorId, scheme)
+    bot.setInkGrad(inkFor(scheme))
   }
 }
 
