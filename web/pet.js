@@ -30,7 +30,7 @@
     return 90
   }
   let sizePx = readSize()
-  const PET_BUILD = '0.8.2'   // 面板里显示，用来确认浏览器拿到的是哪一版
+  const PET_BUILD = '0.8.3'   // 面板里显示，用来确认浏览器拿到的是哪一版
 
   // ————— 样式与容器（GUI 页注入模式） —————
   const style = document.createElement('style')
@@ -138,8 +138,8 @@
 
     // ————— 主题渐变：身体从下方墨色过渡到上方柔光，跟着浅/深色切 —————
     const inkFor = (s) => s === 'dark'
-      ? { from: '#101116', to: '#6d7279', angle: 0 }
-      : { from: '#0a0b0d', to: '#43464e', angle: 0 }
+      ? { from: '#0b0c10', to: '#8f97a2', angle: 0 }
+      : { from: '#000000', to: '#5b6070', angle: 0 }
     // ————— 持久化开关 —————
     const GRAD_KEY = 'dsh-blob-pet-grad'
     const FOLLOW_KEY = 'dsh-blob-pet-follow'
@@ -149,6 +149,8 @@
     let followOn = readFlag(FOLLOW_KEY, true)
     bot.setFollowPointer(followOn)
     if (gradOn) bot.setInkGrad(inkFor(scheme))
+    // 启动时自报版本 + 渐变状态：一眼确认浏览器拿到的是哪一版、渐变开没开
+    setLabel('v' + PET_BUILD + (gradOn ? ' · 渐变开' : ' · 渐变关（右键开）'), 2600)
 
     let lastScheme = scheme
     setInterval(() => {
