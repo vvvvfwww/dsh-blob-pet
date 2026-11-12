@@ -46,6 +46,24 @@
   #bp-hide{position:absolute;top:-6px;right:-10px;width:20px;height:20px;border-radius:50%;border:none;
     background:transparent;color:var(--bp-ink,#17181c);opacity:0;font-size:13px;line-height:1;cursor:pointer;z-index:1}
   #blob-pet-root:hover #bp-hide{opacity:.55}
+  #bp-menu{position:absolute;right:-4px;bottom:calc(100% + 10px);width:200px;display:none;
+    background:var(--bp-paper,#fff);color:var(--bp-ink,#17181c);border:1px solid rgba(128,128,128,.35);
+    border-radius:12px;padding:10px 11px;box-shadow:0 10px 28px rgba(0,0,0,.18);
+    font:12px/1.5 system-ui,sans-serif;text-align:left;cursor:default}
+  #bp-menu.bp-open{display:block}
+  #bp-menu .bp-title{font-weight:700;font-size:11px;letter-spacing:.06em;opacity:.55;margin:0 0 8px}
+  #bp-menu .bp-row{display:flex;align-items:center;gap:8px;margin:6px 0}
+  #bp-menu .bp-row>span{flex:0 0 56px;opacity:.8}
+  #bp-menu input[type=range]{flex:1;min-width:0;accent-color:var(--bp-ink,#17181c)}
+  #bp-menu .bp-row>b{flex:0 0 36px;text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  #bp-menu .bp-tog{margin-left:auto;min-width:46px;padding:2px 10px;border-radius:999px;
+    border:1px solid rgba(128,128,128,.45);background:var(--bp-ink,#17181c);color:var(--bp-paper,#fff);
+    font:inherit;cursor:pointer}
+  #bp-menu .bp-tog.bp-off{background:transparent;color:var(--bp-ink,#17181c);opacity:.55}
+  #bp-menu .bp-actions{justify-content:space-between;margin-top:10px}
+  #bp-menu .bp-btn{padding:3px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.45);
+    background:transparent;color:inherit;font:inherit;cursor:pointer}
+  #bp-menu .bp-btn:hover{border-color:var(--bp-ink,#17181c)}
   `
   document.head.appendChild(style)
 
@@ -117,23 +135,103 @@
     const inkFor = (s) => s === 'dark'
       ? { from: '#101116', to: '#6d7279', angle: 0 }
       : { from: '#0a0b0d', to: '#43464e', angle: 0 }
-    bot.setInkGrad(inkFor(scheme))
+    // ————— 持久化开关 —————
+    const GRAD_KEY = 'dsh-blob-pet-grad'
+    const FOLLOW_KEY = 'dsh-blob-pet-follow'
+    const readFlag = (k, def) => { try { const v = localStorage.getItem(k); return v == null ? def : v === '1' } catch { return def } }
+    const writeFlag = (k, v) => { try { localStorage.setItem(k, v ? '1' : '0') } catch {} }
+    let gradOn = readFlag(GRAD_KEY, true)
+    let followOn = readFlag(FOLLOW_KEY, true)
+    bot.setFollowPointer(followOn)
+    if (gradOn) bot.setInkGrad(inkFor(scheme))
+
     let lastScheme = scheme
     setInterval(() => {
       const s = applySchemeVars()
       if (s === lastScheme) return
       lastScheme = s
       bot.setColor('black', s)
-      bot.setInkGrad(inkFor(s))
+      bot.setInkGrad(gradOn ? inkFor(s) : null)
     }, 4000)
+
+    // ————— 右键面板：大小 / 主题渐变 / 跟随鼠标 / 恢复默认 / 藏起来 —————
+    const menu = document.createElement('div')
+    menu.id = 'bp-menu'
+    menu.innerHTML = '<div class="bp-title">团子设置</div>'
+      + '<div class="bp-row"><span>大小</span><input id="bp-size" type="range" min="' + SIZE_MIN + '" max="' + SIZE_MAX + '" step="5" value="' + sizePx + '"><b id="bp-size-v">' + sizePx + '</b></div>'
+      + '<div class="bp-row"><span>主题渐变</span><button class="bp-tog" data-k="grad" type="button"></button></div>'
+      + '<div class="bp-row"><span>跟随鼠标</span><button class="bp-tog" data-k="follow" type="button"></button></div>'
+      + '<div class="bp-row bp-actions"><button class="bp-btn" data-a="reset" type="button">恢复默认</button>'
+      + '<button class="bp-btn" data-a="hide" type="button">藏起来</button></div>'
+    box.appendChild(menu)
+
+    const sizeInput = menu.querySelector('#bp-size')
+    const sizeVal = menu.querySelector('#bp-size-v')
+    function syncToggles() {
+      menu.querySelectorAll('.bp-tog').forEach((b) => {
+        const on = b.dataset.k === 'grad' ? gradOn : followOn
+        b.textContent = on ? '开' : '关'
+        b.classList.toggle('bp-off', !on)
+      })
+    }
+    function openMenu(on) {
+      menu.classList.toggle('bp-open', !!on)
+      if (on) { sizeInput.value = String(sizePx); sizeVal.textContent = String(sizePx); syncToggles() }
+    }
+    function closeMenu() { openMenu(false) }
+    function setSizeNow(px) {
+      sizePx = Math.min(SIZE_MAX, Math.max(SIZE_MIN, Math.round(px)))
+      bot.setSize(sizePx)
+      try { localStorage.setItem(SIZE_KEY, String(sizePx)) } catch {}
+      sizeInput.value = String(sizePx)
+      sizeVal.textContent = String(sizePx)
+    }
+    sizeInput.addEventListener('input', () => setSizeNow(Number(sizeInput.value)))
+    menu.addEventListener('click', (e) => {
+      const tog = e.target.closest('.bp-tog')
+      if (tog) {
+        if (tog.dataset.k === 'grad') {
+          gradOn = !gradOn
+          writeFlag(GRAD_KEY, gradOn)
+          bot.setInkGrad(gradOn ? inkFor(lastScheme) : null)
+        } else {
+          followOn = !followOn
+          writeFlag(FOLLOW_KEY, followOn)
+          bot.setFollowPointer(followOn)
+        }
+        syncToggles()
+        return
+      }
+      const act = e.target.closest('.bp-btn')
+      if (!act) return
+      if (act.dataset.a === 'reset') {
+        setSizeNow(90)
+        gradOn = true; followOn = true
+        writeFlag(GRAD_KEY, true); writeFlag(FOLLOW_KEY, true)
+        bot.setInkGrad(inkFor(lastScheme)); bot.setFollowPointer(true)
+        syncToggles()
+      } else if (act.dataset.a === 'hide') {
+        closeMenu()
+        box.style.display = 'none'
+      }
+    })
+    box.addEventListener('contextmenu', (e) => {
+      e.preventDefault(); e.stopPropagation()
+      openMenu(!menu.classList.contains('bp-open'))
+    })
+    document.addEventListener('pointerdown', (e) => {
+      if (!menu.classList.contains('bp-open')) return
+      if (box.contains(e.target)) return
+      closeMenu()
+    }, true)
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu() })
 
     // ————— 滚轮调大小（60–200px）—————
     box.addEventListener('wheel', (e) => {
       if (!e.deltaY) return
+      if (menu.contains(e.target)) return        // 面板里滚动不缩放团子
       e.preventDefault()
-      sizePx = Math.min(SIZE_MAX, Math.max(SIZE_MIN, sizePx + (e.deltaY < 0 ? 10 : -10)))
-      bot.setSize(sizePx)
-      try { localStorage.setItem(SIZE_KEY, String(sizePx)) } catch {}
+      setSizeNow(sizePx + (e.deltaY < 0 ? 10 : -10))
       setLabel(`${sizePx}px`, 1200)
     }, { passive: false })
 
@@ -296,6 +394,7 @@
     let petSeq = 0
     let drag = null
     box.addEventListener('pointerdown', (e) => {
+      if (e.button === 2) return                // 右键留给设置面板
       if (e.target === hide) return
       drag = { x: e.clientX, y: e.clientY, moved: false, rect: box.getBoundingClientRect() }
       box.setPointerCapture(e.pointerId)

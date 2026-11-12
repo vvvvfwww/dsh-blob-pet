@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0（2026-11-12）— 右键设置面板
+- 右键团子弹出设置面板：大小滑杆（60–200px，拖动即时生效并存 localStorage）、主题渐变开/关、
+  跟随鼠标开/关、恢复默认、藏起来。
+- 开关持久化键：`dsh-blob-pet-grad`、`dsh-blob-pet-follow`；「恢复默认」回 90px + 两个开关都开。
+- 交互细节：面板内滚动不缩放团子；右键不再触发拖拽；点面板外或按 Esc 关闭；深浅色沿用
+  --bp-ink / --bp-paper（实测深色下 --bp-paper = #232428）。
+- 回归：滑杆 180 → 恢复默认 90；关渐变后身体 path 的 fill 由 `url(#…)` 变为纯色、再开回渐变；
+  「藏起来」置 display:none；全程无 JS 报错；smoke / native-smoke / host-test 全绿。
+- VERSION bump 0.7.0 → 0.8.0。
+
 ## 0.7.0（2026-11-12）— 引擎跟进 grok-icon-study web 分支 + 三样加料
 - 引擎整体升级到上游 `web` 分支（d764946，15 个提交）：character.js 857→1446 行、
   eyes.js 218→424、pose.js 409→411、tables.js +1、fx.js +1（math/tricks/geometry-data 逐字节未变，
