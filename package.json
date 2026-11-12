@@ -1,6 +1,6 @@
 {
   "name": "dsh-blob-pet",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "DSH 桌宠：一个弹簧驱动的黑色小团子，跟着 agent 的真实活动换表情——思考时抬眼、跑工具时蹦跳卖力、等你批准时举旗抖动、回合完成庆祝跳一下、出错吓得发抖、空闲打瞌睡。引擎几何数据提取自 xAI Grok 应用包，仅个人学习使用（见 README 版权声明）。",
   "keywords": [
     "dsh",

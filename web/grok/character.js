@@ -1403,10 +1403,7 @@
         manualHold: false,
         manualMix: 0,
       });
-      // 眼睛微调（面板 setEyeTune）需要独立权重：没捏住时也要生效
-      const eyeTuneMix = this.eyeTune ? 1 : 0;
-      const eyeMix = Math.max(holdMix, eyeTuneMix);
-      if (eyeMix > 0.002) {
+      if (holdMix > 0.002) {
         // Eye-sphere rim = visible head half-width in overlay units, so the
         // fold/slice lands on the silhouette like the original lab.
         let rim = 95;
@@ -1420,7 +1417,7 @@
           pose: this._poseNow(),
           eyes: this.eyeTune,
           svg: this.svg,
-          mix: eyeMix,
+          mix: holdMix,
           rim,
         });
       }
