@@ -30,7 +30,16 @@
     return 90
   }
   let sizePx = readSize()
-  const PET_BUILD = '0.8.3'   // 面板里显示，用来确认浏览器拿到的是哪一版
+  const INK_PRESETS = [
+    { name: '墨', from: '#000000', to: '#5b6070' },
+    { name: '石墨', from: '#14161a', to: '#a7adb7' },
+    { name: '藏青', from: '#061021', to: '#4f7fc4' },
+    { name: '苔绿', from: '#06140f', to: '#4f9f7a' },
+    { name: '紫檀', from: '#14091f', to: '#8f6fd6' },
+    { name: '赭石', from: '#1a0d08', to: '#c2704a' },
+    { name: '霞', from: '#2a0f2e', to: '#e08a5a' },
+  ]
+  const PET_BUILD = '0.8.4'   // 面板里显示，用来确认浏览器拿到的是哪一版
 
   // ————— 样式与容器（GUI 页注入模式） —————
   const style = document.createElement('style')
@@ -62,6 +71,14 @@
     border:1px solid rgba(128,128,128,.45);background:var(--bp-ink,#17181c);color:var(--bp-paper,#fff);
     font:inherit;cursor:pointer}
   #bp-menu .bp-tog.bp-off{background:transparent;color:var(--bp-ink,#17181c);opacity:.55}
+  #bp-menu input[type=color]{width:34px;height:22px;padding:0;border:1px solid rgba(128,128,128,.45);
+    border-radius:6px;background:none;cursor:pointer}
+  #bp-menu .bp-sep{font-style:normal;opacity:.45}
+  #bp-menu .bp-mini{margin-left:auto;padding:1px 7px;line-height:1.3}
+  #bp-menu .bp-swatches{gap:6px;flex-wrap:wrap}
+  #bp-menu .bp-sw{width:20px;height:20px;padding:0;border-radius:6px;
+    border:1px solid rgba(128,128,128,.45);cursor:pointer}
+  #bp-menu .bp-sw.bp-on-sw{outline:2px solid var(--bp-ink,#17181c);outline-offset:1px}
   #bp-menu .bp-actions{justify-content:space-between;margin-top:10px}
   #bp-menu .bp-btn{padding:3px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.45);
     background:transparent;color:inherit;font:inherit;cursor:pointer}
@@ -136,10 +153,21 @@
       style: bot.body.style.fill, size: sizePx, scheme: lastScheme })
     let lastState = 'idle'
 
-    // ————— 主题渐变：身体从下方墨色过渡到上方柔光，跟着浅/深色切 —————
-    const inkFor = (s) => s === 'dark'
+    // ————— 主题渐变：身体下端墨色 → 上端柔光；用户自己挑的色优先 —————
+    const INK_KEY = 'dsh-blob-pet-ink'
+    const HEX_RE = /^#[0-9a-fA-F]{6}$/
+    const readInk = () => {
+      try {
+        const v = JSON.parse(localStorage.getItem(INK_KEY))
+        if (v && HEX_RE.test(v.from) && HEX_RE.test(v.to)) return { from: v.from, to: v.to, angle: Number(v.angle) || 0 }
+      } catch {}
+      return null
+    }
+    let customInk = readInk()
+    const themeInk = (s) => s === 'dark'
       ? { from: '#0b0c10', to: '#8f97a2', angle: 0 }
       : { from: '#000000', to: '#5b6070', angle: 0 }
+    const inkFor = (s) => customInk || themeInk(s)
     // ————— 持久化开关 —————
     const GRAD_KEY = 'dsh-blob-pet-grad'
     const FOLLOW_KEY = 'dsh-blob-pet-follow'
@@ -166,6 +194,8 @@
     menu.id = 'bp-menu'
     menu.innerHTML = '<div class="bp-title">团子设置<em id="bp-ver"> v' + PET_BUILD + '</em></div>'
       + '<div class="bp-row"><span>大小</span><input id="bp-size" type="range" min="' + SIZE_MIN + '" max="' + SIZE_MAX + '" step="5" value="' + sizePx + '"><b id="bp-size-v">' + sizePx + '</b></div>'
+      + '<div class="bp-row"><span>渐变</span><input id="bp-c1" type="color"><em class="bp-sep">→</em><input id="bp-c2" type="color"><button class="bp-btn bp-mini" data-a="swap" type="button" title="对调两端">⇄</button></div>'
+      + '<div class="bp-row bp-swatches">' + INK_PRESETS.map((q) => '<button class="bp-sw" type="button" data-f="' + q.from + '" data-t="' + q.to + '" title="' + q.name + '"></button>').join('') + '</div>'
       + '<div class="bp-row"><span>主题渐变</span><button class="bp-tog" data-k="grad" type="button"></button></div>'
       + '<div class="bp-row"><span>跟随鼠标</span><button class="bp-tog" data-k="follow" type="button"></button></div>'
       + '<div class="bp-row bp-actions"><button class="bp-btn" data-a="reset" type="button">恢复默认</button>'
@@ -176,6 +206,8 @@
     ;['pointerdown', 'pointermove', 'pointerup', 'click', 'wheel'].forEach((t) => {
       menu.addEventListener(t, (e) => e.stopPropagation(), false)
     })
+    const c1 = menu.querySelector('#bp-c1')
+    const c2 = menu.querySelector('#bp-c2')
     const sizeInput = menu.querySelector('#bp-size')
     const sizeVal = menu.querySelector('#bp-size-v')
     function syncToggles() {
@@ -185,9 +217,36 @@
         b.classList.toggle('bp-off', !on)
       })
     }
+    function syncColors() {
+      const spec = inkFor(lastScheme)
+      c1.value = spec.from
+      c2.value = spec.to
+      menu.querySelectorAll('.bp-sw').forEach((b) => {
+        b.style.background = 'linear-gradient(to top,' + b.dataset.f + ',' + b.dataset.t + ')'
+        b.classList.toggle('bp-on-sw', b.dataset.f.toLowerCase() === spec.from.toLowerCase() && b.dataset.t.toLowerCase() === spec.to.toLowerCase())
+      })
+    }
+    function applyInk(spec) {
+      customInk = { from: spec.from, to: spec.to, angle: 0 }
+      try { localStorage.setItem(INK_KEY, JSON.stringify(customInk)) } catch {}
+      gradOn = true
+      writeFlag(GRAD_KEY, true)
+      bot.setInkGrad(customInk)
+      syncToggles()
+      syncColors()
+    }
     function openMenu(on) {
       menu.classList.toggle('bp-open', !!on)
-      if (on) { sizeInput.value = String(sizePx); sizeVal.textContent = String(sizePx); syncToggles() }
+      if (on) {
+        sizeInput.value = String(sizePx); sizeVal.textContent = String(sizePx)
+        syncToggles(); syncColors()
+        // 贴近屏幕顶端时翻到下方展开，避免面板被裁掉
+        menu.style.top = ''; menu.style.bottom = ''
+        if (menu.getBoundingClientRect().top < 8) {
+          menu.style.bottom = 'auto'
+          menu.style.top = 'calc(100% + 10px)'
+        }
+      }
     }
     function closeMenu() { openMenu(false) }
     function setSizeNow(px) {
@@ -198,6 +257,8 @@
       sizeVal.textContent = String(sizePx)
     }
     sizeInput.addEventListener('input', () => setSizeNow(Number(sizeInput.value)))
+    c1.addEventListener('input', () => applyInk({ from: c1.value, to: c2.value }))
+    c2.addEventListener('input', () => applyInk({ from: c1.value, to: c2.value }))
     menu.addEventListener('click', (e) => {
       const tog = e.target.closest('.bp-tog')
       if (tog) {
@@ -213,11 +274,16 @@
         syncToggles()
         return
       }
+      const sw = e.target.closest('.bp-sw')
+      if (sw) { applyInk({ from: sw.dataset.f, to: sw.dataset.t }); return }
       const act = e.target.closest('.bp-btn')
       if (!act) return
+      if (act.dataset.a === 'swap') { applyInk({ from: c2.value, to: c1.value }); return }
       if (act.dataset.a === 'reset') {
         setSizeNow(90)
         gradOn = true; followOn = true
+        customInk = null
+        try { localStorage.removeItem(INK_KEY) } catch {}
         writeFlag(GRAD_KEY, true); writeFlag(FOLLOW_KEY, true)
         bot.setInkGrad(inkFor(lastScheme)); bot.setFollowPointer(true)
         syncToggles()
