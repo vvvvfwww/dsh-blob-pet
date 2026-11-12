@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.2（2026-11-12）— 面板显示版本号、滑杆可拖、渐变每帧兜底
+- 面板标题右侧加了版本徽标（`团子设置 v0.8.2`）：一眼确认浏览器拿到的是哪一版，
+  排查「改了没生效」不用再翻控制台。
+- 面板内 pointerdown/pointermove/pointerup/click/wheel 全部 stopPropagation：
+  即使外层逻辑有遗漏，点滑杆也不会被 `setPointerCapture` 抢走指针（这正是滑杆能点不能拖的原因）。
+  实测：滑杆按下时 root.hasPointerCapture === false、团子没位移、状态不变。
+- `_paint` 每帧把内联 `fill: url(#…)` 重写一次（原来只在 setColor/setInkGrad 时写）：
+  宿主页面 CSS 抢 fill 也压不掉渐变，实测有 `#blob-pet-root svg path{fill:#26262a}` 覆盖时
+  `__blobInk()` 仍返回 `fill: url(#grok-ink-…)`。
+- VERSION bump 0.8.1 → 0.8.2。
+
 ## 0.8.1（2026-11-12）— 修面板点击串味、渐变被样式压掉
 - 面板上的 pointerdown / pointermove / pointerup 一律早退：点滑杆、点开关不再被当成
   「摸头」或「拖拽捏团子」，团子状态保持不动（实测点击后 state 仍是 idle、无气泡）。

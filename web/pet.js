@@ -30,6 +30,7 @@
     return 90
   }
   let sizePx = readSize()
+  const PET_BUILD = '0.8.2'   // 面板里显示，用来确认浏览器拿到的是哪一版
 
   // ————— 样式与容器（GUI 页注入模式） —————
   const style = document.createElement('style')
@@ -52,6 +53,7 @@
     font:12px/1.5 system-ui,sans-serif;text-align:left;cursor:default}
   #bp-menu.bp-open{display:block}
   #bp-menu .bp-title{font-weight:700;font-size:11px;letter-spacing:.06em;opacity:.55;margin:0 0 8px}
+  #bp-menu .bp-title em{font-style:normal;font-weight:400;opacity:.8;letter-spacing:0}
   #bp-menu .bp-row{display:flex;align-items:center;gap:8px;margin:6px 0}
   #bp-menu .bp-row>span{flex:0 0 56px;opacity:.8}
   #bp-menu input[type=range]{flex:1;min-width:0;accent-color:var(--bp-ink,#17181c)}
@@ -160,7 +162,7 @@
     // ————— 右键面板：大小 / 主题渐变 / 跟随鼠标 / 恢复默认 / 藏起来 —————
     const menu = document.createElement('div')
     menu.id = 'bp-menu'
-    menu.innerHTML = '<div class="bp-title">团子设置</div>'
+    menu.innerHTML = '<div class="bp-title">团子设置<em id="bp-ver"> v' + PET_BUILD + '</em></div>'
       + '<div class="bp-row"><span>大小</span><input id="bp-size" type="range" min="' + SIZE_MIN + '" max="' + SIZE_MAX + '" step="5" value="' + sizePx + '"><b id="bp-size-v">' + sizePx + '</b></div>'
       + '<div class="bp-row"><span>主题渐变</span><button class="bp-tog" data-k="grad" type="button"></button></div>'
       + '<div class="bp-row"><span>跟随鼠标</span><button class="bp-tog" data-k="follow" type="button"></button></div>'
@@ -168,6 +170,10 @@
       + '<button class="bp-btn" data-a="hide" type="button">藏起来</button></div>'
     box.appendChild(menu)
 
+    // 面板内的一切事件都到此为止，别再冒泡去触发团子的摸头/拖拽
+    ;['pointerdown', 'pointermove', 'pointerup', 'click', 'wheel'].forEach((t) => {
+      menu.addEventListener(t, (e) => e.stopPropagation(), false)
+    })
     const sizeInput = menu.querySelector('#bp-size')
     const sizeVal = menu.querySelector('#bp-size-v')
     function syncToggles() {

@@ -1281,6 +1281,11 @@
     }
 
     _paint(now) {
+      // 渐变兜底：宿主页面的 CSS 可能按住 body 的 fill，每帧把内联样式再写一次
+      const wantFill = this.inkGrad
+        ? `url(#${this.inkGrad.radial ? this.inkRadialId : this.inkGradId})`
+        : "";
+      if (this.body.style.fill !== wantFill) this.body.style.fill = wantFill;
       const geo = this.geo;
       const R = geo.Re;
       const shape = geo.shapes[this.shapeName];
