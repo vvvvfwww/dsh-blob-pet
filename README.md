@@ -42,9 +42,14 @@ spin/bounce/burst 三个 trick API 全接入。
   - `lib/index.js`：DSH 宿主事件（session/event + assistant-stream）→ SSE `/blob-pet/events`；
     `tapIndex` + `webserver/index-inject` 双通道注入。
   - `web/pet.js`：agent 活动 → 他的状态名的映射表 + 气泡/拖拽/摸头交互。
-- `/blob-pet/pet.js` 由宿主把 9 个文件拼成单文档下发（mtime 签名缓存，改任一文件刷新即生效）。
-- 想换身形/颜色：`web/pet.js` 里 `new GrokCharacter(svg, {shape:'blob', color:'black'})`
-  改成 `GROK_GEO.shapes` / `palette` 里任意的 18 种 × 11 色。
+- `/blob-pet/pet.js` 由宿主把 9 个文件拼成单文档下发（mtime 签名缓存，改任一文件刷新即生效；
+  `lib/index.js` 的 `getEngine()` 把 `engine-core.cjs` 与 `web/grok/*.js` 的 mtime 一起算签名，
+  所以只改引擎文件也会热重载）。
+- 团子对引擎**只有一处自有补丁**：`character.js` 的 `keepBody`（`bodyW = 1`、`wre = 0`）。
+  原生链路（`engine-core.cjs` / `render-bridge.cjs`）必须传 `keepBody: true`——overlay 状态会把
+  身体缩成粒子环（`bodyW = 1 - yl` → scale≈0.14），QtSvg 序列化后粒子不渲染，团子会塌成小黑点。
+- 想换身形/颜色：网页团子直接右键面板选（见下节）；代码里是 `new GrokCharacter(svg, {shape, color})`，
+  可选 `GROK_GEO.shapes` 里 18 种 × `palette` 里 11 色。
 
 ## 安装
 
@@ -92,6 +97,29 @@ DSH 宿主（引擎+39态状态机，/frames NDJSON 60fps）──▶ tools/pet-
 - 图鉴（39 态网页）：sidecar `/gallery`，右键菜单直接打开。
 - GUI 页面注入默认关；想要页面上也挂一只：`~/.dsh/blob-pet.json` 写 `{"gui": true}`。
 - 依赖：本机 Python 3.13 + PySide6（已装）。
+
+## 网页团子（GUI 注入）· 右键团子出设置面板
+
+`~/.dsh/blob-pet.json` 里 `{"gui": true}` 时，GUI 右下角也挂一只；除了拖拽/摸头，**右键团子弹面板**：
+
+| 面板项 | 效果 | 持久化键 |
+|---|---|---|
+| 大小 | 60–200px，滚轮同效 | `dsh-blob-pet-size` |
+| 渐变 | 两个取色器（下端色 → 上端色）+ `⇄` 对调 + 7 组预设（墨/石墨/藏青/苔绿/紫檀/赭石/霞） | `dsh-blob-pet-ink` |
+| 形状 | 18 种身形下拉（团子/卵石/豆子/蛋/方圆/药片/胶囊/圆柱/六边/宝石/晶体/楔子/盾牌/圆顶/拱门/云朵/水滴/叶子），走引擎 `setShape()` 弹簧过渡 | `dsh-blob-pet-shape` |
+| 主题渐变 | 关掉就是纯色墨 | `dsh-blob-pet-grad` |
+| 跟随鼠标 | 眼睛是否跟着指针 | `dsh-blob-pet-follow` |
+| 恢复默认 / 藏起来 | 回到 90px + 默认渐变 + 团子身形 / 隐藏团子 | — |
+
+- 面板标题右侧是**版本徽标**（`团子设置 v0.8.6`）：浏览器脚本不会自己热更，改完必须 `Ctrl+Shift+R`，
+  徽标就是确认加载到哪一版的锚。
+- 面板内所有指针事件都 `stopPropagation`：点滑杆/取色器不会触发团子的摸头或拖拽（早期版本会被
+  `setPointerCapture` 抢走指针，滑杆只能点不能拖）。
+- 渐变被页面 CSS 压掉的问题已兜住：`_paint` 每帧把内联 `fill: url(#…)` 重写一次。
+- **眼睛微调已撤**（0.8.5 加过、0.8.6 撤了）：引擎的单眼微调（`blendCustomEyes`）是「手动捏住团子」
+  时才走的**静态眼形**分支，常开会顶掉眨眼 / 眼形轮换 / 追踪。要重做的话得改成「面板打开时才进微调模式、
+  关面板回动画」，别再把 `mix` 常开。
+- 原生桌面窗（sidecar 链路）目前仍是固定 `shape:'blob'` + 默认渐变，面板只影响网页团子。
 
 ## 测试
 
