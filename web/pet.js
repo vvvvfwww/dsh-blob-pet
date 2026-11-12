@@ -39,7 +39,52 @@
     { name: '赭石', from: '#1a0d08', to: '#c2704a' },
     { name: '霞', from: '#2a0f2e', to: '#e08a5a' },
   ]
-  const PET_BUILD = '0.8.4'   // 面板里显示，用来确认浏览器拿到的是哪一版
+  const PET_BUILD = '0.8.5'   // 面板里显示，用来确认浏览器拿到的是哪一版
+
+  // ————— 身形 / 眼睛微调：面板可调，存 localStorage —————
+  const SHAPE_KEY = 'dsh-blob-pet-shape'
+  const EYE_KEY = 'dsh-blob-pet-eye'
+  const SHAPES = [
+    ['blob', '团子'], ['pebble', '卵石'], ['bean', '豆子'], ['egg', '蛋'],
+    ['squircle', '方圆'], ['tablet', '药片'], ['capsule', '胶囊'], ['cylinder', '圆柱'],
+    ['hex', '六边'], ['gem', '宝石'], ['crystal', '晶体'], ['wedge', '楔子'],
+    ['shield', '盾牌'], ['dome', '圆顶'], ['arch', '拱门'], ['cloud', '云朵'],
+    ['teardrop', '水滴'], ['leaf', '叶子'],
+  ]
+  const EYE_DEF = { width: 20, height: 50, size: 1, angle: 0, x: 0, y: -7 }
+  function clampNum(v, lo, hi, dflt) {
+    const n = Number(v)
+    if (!Number.isFinite(n)) return dflt
+    return Math.min(hi, Math.max(lo, n))
+  }
+  function readShape() {
+    try {
+      const v = localStorage.getItem(SHAPE_KEY)
+      if (v && SHAPES.some((q) => q[0] === v)) return v
+    } catch {}
+    return 'blob'
+  }
+  function readEye() {
+    const base = () => ({ spacing: 35, left: { ...EYE_DEF }, right: { ...EYE_DEF } })
+    try {
+      const raw = JSON.parse(localStorage.getItem(EYE_KEY) || 'null')
+      if (!raw) return base()
+      const side = (k) => {
+        const o = raw[k] || {}
+        return {
+          width: clampNum(o.width, 10, 60, EYE_DEF.width),
+          height: clampNum(o.height, 20, 90, EYE_DEF.height),
+          size: clampNum(o.size, 0.35, 2.2, EYE_DEF.size),
+          angle: clampNum(o.angle, -45, 45, EYE_DEF.angle),
+          x: clampNum(o.x, -40, 40, EYE_DEF.x),
+          y: clampNum(o.y, -20, 20, EYE_DEF.y),
+        }
+      }
+      return { spacing: clampNum(raw.spacing, 0, 150, 35), left: side('left'), right: side('right') }
+    } catch { return base() }
+  }
+  let shapeName = readShape()
+  let eyeTune = readEye()
 
   // ————— 样式与容器（GUI 页注入模式） —————
   const style = document.createElement('style')
@@ -79,6 +124,11 @@
   #bp-menu .bp-sw{width:20px;height:20px;padding:0;border-radius:6px;
     border:1px solid rgba(128,128,128,.45);cursor:pointer}
   #bp-menu .bp-sw.bp-on-sw{outline:2px solid var(--bp-ink,#17181c);outline-offset:1px}
+  #bp-menu{max-height:min(74vh,470px);overflow-y:auto}
+  #bp-menu select{flex:1;min-width:0;font:inherit;color:inherit;background:transparent;
+    border:1px solid rgba(128,128,128,.45);border-radius:7px;padding:2px 4px;cursor:pointer}
+  #bp-menu .bp-side{flex:0 0 auto;padding:2px 10px;line-height:1.35}
+  #bp-menu .bp-side.bp-on-side{background:var(--bp-ink,#17181c);color:var(--bp-paper,#fff);border-color:transparent}
   #bp-menu .bp-actions{justify-content:space-between;margin-top:10px}
   #bp-menu .bp-btn{padding:3px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.45);
     background:transparent;color:inherit;font:inherit;cursor:pointer}
@@ -137,7 +187,7 @@
     const scheme = applySchemeVars()
     const bot = new GrokCharacter(svg, {
       // 登录页原参数（见 grok-icon-study README）：black / blob / loginWrap
-      shape: 'blob',
+      shape: shapeName,
       color: 'black',
       scheme,
       mode: 'hold',
@@ -148,6 +198,7 @@
       onChange(snap) { lastState = snap.state },
     })
     window.__blobBot = bot   // 调试入口
+    bot.setEyeTune(eyeTune)  // 面板里调过的眼睛参数
     // 渐变自检：控制台敲 __blobInk() 看当前墨色是不是 url(#渐变)
     window.__blobInk = () => ({ grad: !!bot.inkGrad, fill: bot.body.getAttribute('fill'),
       style: bot.body.style.fill, size: sizePx, scheme: lastScheme })
@@ -196,6 +247,13 @@
       + '<div class="bp-row"><span>大小</span><input id="bp-size" type="range" min="' + SIZE_MIN + '" max="' + SIZE_MAX + '" step="5" value="' + sizePx + '"><b id="bp-size-v">' + sizePx + '</b></div>'
       + '<div class="bp-row"><span>渐变</span><input id="bp-c1" type="color"><em class="bp-sep">→</em><input id="bp-c2" type="color"><button class="bp-btn bp-mini" data-a="swap" type="button" title="对调两端">⇄</button></div>'
       + '<div class="bp-row bp-swatches">' + INK_PRESETS.map((q) => '<button class="bp-sw" type="button" data-f="' + q.from + '" data-t="' + q.to + '" title="' + q.name + '"></button>').join('') + '</div>'
+      + '<div class="bp-row"><span>形状</span><select id="bp-shape">' + SHAPES.map((q) => '<option value="' + q[0] + '">' + q[1] + '</option>').join('') + '</select></div>'
+      + '<div class="bp-row"><span>眼距</span><input id="bp-gap" type="range" min="0" max="150" step="5"><b id="bp-gap-v"></b></div>'
+      + '<div class="bp-row"><span>眼睛</span><button class="bp-btn bp-side" type="button" data-side="left">左</button><button class="bp-btn bp-side" type="button" data-side="right">右</button><button class="bp-btn bp-mini" type="button" data-a="eyereset">复位</button></div>'
+      + '<div class="bp-row"><span>眼大小</span><input id="bp-esize" type="range" min="35" max="220" step="5"><b id="bp-esize-v"></b></div>'
+      + '<div class="bp-row"><span>眼宽</span><input id="bp-ewidth" type="range" min="10" max="60" step="1"><b id="bp-ewidth-v"></b></div>'
+      + '<div class="bp-row"><span>眼高</span><input id="bp-eheight" type="range" min="20" max="90" step="1"><b id="bp-eheight-v"></b></div>'
+      + '<div class="bp-row"><span>眼斜角</span><input id="bp-eangle" type="range" min="-45" max="45" step="1"><b id="bp-eangle-v"></b></div>'
       + '<div class="bp-row"><span>主题渐变</span><button class="bp-tog" data-k="grad" type="button"></button></div>'
       + '<div class="bp-row"><span>跟随鼠标</span><button class="bp-tog" data-k="follow" type="button"></button></div>'
       + '<div class="bp-row bp-actions"><button class="bp-btn" data-a="reset" type="button">恢复默认</button>'
@@ -210,6 +268,18 @@
     const c2 = menu.querySelector('#bp-c2')
     const sizeInput = menu.querySelector('#bp-size')
     const sizeVal = menu.querySelector('#bp-size-v')
+    const shapeSel = menu.querySelector('#bp-shape')
+    const gapInput = menu.querySelector('#bp-gap')
+    const gapVal = menu.querySelector('#bp-gap-v')
+    const eSize = menu.querySelector('#bp-esize')
+    const eSizeV = menu.querySelector('#bp-esize-v')
+    const eW = menu.querySelector('#bp-ewidth')
+    const eWV = menu.querySelector('#bp-ewidth-v')
+    const eH = menu.querySelector('#bp-eheight')
+    const eHV = menu.querySelector('#bp-eheight-v')
+    const eA = menu.querySelector('#bp-eangle')
+    const eAV = menu.querySelector('#bp-eangle-v')
+    let eyeSide = 'left'
     function syncToggles() {
       menu.querySelectorAll('.bp-tog').forEach((b) => {
         const on = b.dataset.k === 'grad' ? gradOn : followOn
@@ -235,11 +305,33 @@
       syncToggles()
       syncColors()
     }
+    function syncShape() { shapeSel.value = shapeName }
+    function syncEye() {
+      const L = eyeTune[eyeSide]
+      gapInput.value = String(eyeTune.spacing); gapVal.textContent = String(eyeTune.spacing)
+      const pct = Math.round(L.size * 100)
+      eSize.value = String(pct); eSizeV.textContent = pct + '%'
+      eW.value = String(L.width); eWV.textContent = String(L.width)
+      eH.value = String(L.height); eHV.textContent = String(L.height)
+      eA.value = String(L.angle); eAV.textContent = (L.angle > 0 ? '+' : '') + L.angle + '°'
+      menu.querySelectorAll('.bp-side').forEach((b) => b.classList.toggle('bp-on-side', b.dataset.side === eyeSide))
+    }
+    function applyEye() {
+      try { localStorage.setItem(EYE_KEY, JSON.stringify(eyeTune)) } catch {}
+      bot.setEyeTune(JSON.parse(JSON.stringify(eyeTune)))
+      syncEye()
+    }
+    function setShapeNow(name) {
+      shapeName = name
+      try { localStorage.setItem(SHAPE_KEY, name) } catch {}
+      bot.setShape(name)
+      syncShape()
+    }
     function openMenu(on) {
       menu.classList.toggle('bp-open', !!on)
       if (on) {
         sizeInput.value = String(sizePx); sizeVal.textContent = String(sizePx)
-        syncToggles(); syncColors()
+        syncToggles(); syncColors(); syncShape(); syncEye()
         // 贴近屏幕顶端时翻到下方展开，避免面板被裁掉
         menu.style.top = ''; menu.style.bottom = ''
         if (menu.getBoundingClientRect().top < 8) {
@@ -257,6 +349,12 @@
       sizeVal.textContent = String(sizePx)
     }
     sizeInput.addEventListener('input', () => setSizeNow(Number(sizeInput.value)))
+    shapeSel.addEventListener('change', () => setShapeNow(shapeSel.value))
+    gapInput.addEventListener('input', () => { eyeTune.spacing = Number(gapInput.value); applyEye() })
+    eSize.addEventListener('input', () => { eyeTune[eyeSide].size = Number(eSize.value) / 100; applyEye() })
+    eW.addEventListener('input', () => { eyeTune[eyeSide].width = Number(eW.value); applyEye() })
+    eH.addEventListener('input', () => { eyeTune[eyeSide].height = Number(eH.value); applyEye() })
+    eA.addEventListener('input', () => { eyeTune[eyeSide].angle = Number(eA.value); applyEye() })
     c1.addEventListener('input', () => applyInk({ from: c1.value, to: c2.value }))
     c2.addEventListener('input', () => applyInk({ from: c1.value, to: c2.value }))
     menu.addEventListener('click', (e) => {
@@ -274,11 +372,19 @@
         syncToggles()
         return
       }
+      const side = e.target.closest('.bp-side')
+      if (side) { eyeSide = side.dataset.side; syncEye(); return }
       const sw = e.target.closest('.bp-sw')
       if (sw) { applyInk({ from: sw.dataset.f, to: sw.dataset.t }); return }
       const act = e.target.closest('.bp-btn')
       if (!act) return
       if (act.dataset.a === 'swap') { applyInk({ from: c2.value, to: c1.value }); return }
+      if (act.dataset.a === 'eyereset') {
+        eyeTune[eyeSide] = { ...EYE_DEF }
+        applyEye()
+        setLabel('眼睛复位', 1200)
+        return
+      }
       if (act.dataset.a === 'reset') {
         setSizeNow(90)
         gradOn = true; followOn = true
@@ -286,6 +392,8 @@
         try { localStorage.removeItem(INK_KEY) } catch {}
         writeFlag(GRAD_KEY, true); writeFlag(FOLLOW_KEY, true)
         bot.setInkGrad(inkFor(lastScheme)); bot.setFollowPointer(true)
+        eyeTune = { spacing: 35, left: { ...EYE_DEF }, right: { ...EYE_DEF } }
+        applyEye(); setShapeNow('blob')
         syncToggles()
       } else if (act.dataset.a === 'hide') {
         closeMenu()
