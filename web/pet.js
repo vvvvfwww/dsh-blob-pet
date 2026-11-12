@@ -129,6 +129,9 @@
       onChange(snap) { lastState = snap.state },
     })
     window.__blobBot = bot   // 调试入口
+    // 渐变自检：控制台敲 __blobInk() 看当前墨色是不是 url(#渐变)
+    window.__blobInk = () => ({ grad: !!bot.inkGrad, fill: bot.body.getAttribute('fill'),
+      style: bot.body.style.fill, size: sizePx, scheme: lastScheme })
     let lastState = 'idle'
 
     // ————— 主题渐变：身体从下方墨色过渡到上方柔光，跟着浅/深色切 —————
@@ -395,12 +398,14 @@
     let drag = null
     box.addEventListener('pointerdown', (e) => {
       if (e.button === 2) return                // 右键留给设置面板
+      if (menu.contains(e.target)) return        // 面板上的按下不拖团子
       if (e.target === hide) return
       drag = { x: e.clientX, y: e.clientY, moved: false, rect: box.getBoundingClientRect() }
       box.setPointerCapture(e.pointerId)
     })
     box.addEventListener('pointermove', (e) => {
       if (!drag) return
+      if (menu.contains(e.target)) return
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y
       if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true
       if (drag.moved) {
@@ -422,7 +427,8 @@
         })
       }
     })
-    box.addEventListener('pointerup', () => {
+    box.addEventListener('pointerup', (e) => {
+      if (menu.contains(e.target)) { drag = null; return }   // 面板上的点击不摸头
       bot.setManualHold(false)   // 松手：捏住的偏移按弹簧收回
       if (drag && !drag.moved) {
         wakeIfNeeded()

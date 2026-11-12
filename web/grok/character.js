@@ -440,6 +440,7 @@
         }
         this.svg.style.setProperty("--ink", inkCss(id));
         this.body.setAttribute("fill", "var(--fg, #000)");
+        this.body.style.fill = "";
       }
       this.svg.style.setProperty("--bg", this.eyeColor || EYE_BG);
     }
@@ -457,6 +458,7 @@
         this.inkRadialStops[0].setAttribute("stop-color", spec.from);
         this.inkRadialStops[1].setAttribute("stop-color", spec.to);
         this.body.setAttribute("fill", `url(#${this.inkRadialId})`);
+        this.body.style.fill = `url(#${this.inkRadialId})`;
         this.svg.style.setProperty("--fg", spec.from);
         this.svg.style.setProperty("--ink", `radial-gradient(circle at 50% 42%, ${spec.from}, ${spec.to})`);
         return;
@@ -473,6 +475,7 @@
       this.inkStops[0].setAttribute("stop-color", spec.from);
       this.inkStops[1].setAttribute("stop-color", spec.to);
       this.body.setAttribute("fill", `url(#${this.inkGradId})`);
+      this.body.style.fill = `url(#${this.inkGradId})`;
       this.svg.style.setProperty("--fg", spec.from);
       this.svg.style.setProperty("--ink", `linear-gradient(${deg}deg, ${spec.from}, ${spec.to})`);
     }

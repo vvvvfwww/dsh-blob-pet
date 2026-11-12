@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.1（2026-11-12）— 修面板点击串味、渐变被样式压掉
+- 面板上的 pointerdown / pointermove / pointerup 一律早退：点滑杆、点开关不再被当成
+  「摸头」或「拖拽捏团子」，团子状态保持不动（实测点击后 state 仍是 idle、无气泡）。
+- 渐变改用**内联 style** 也写一份（character.js `_paintInkGrad` / setColor 纯色分支）：
+  SVG 的 presentation attribute 会被外部 CSS 压掉，内联样式优先级更高。
+  实测有 `#blob-pet-root svg path{fill:#26262a}` 这种覆盖时，渐变仍生效（顶部 60.6 / 底部 32.7）。
+- 加自检入口 `window.__blobInk()`：控制台敲一下就能看到 grad / fill / style / size / scheme。
+- VERSION bump 0.8.0 → 0.8.1。
+
 ## 0.8.0（2026-11-12）— 右键设置面板
 - 右键团子弹出设置面板：大小滑杆（60–200px，拖动即时生效并存 localStorage）、主题渐变开/关、
   跟随鼠标开/关、恢复默认、藏起来。
