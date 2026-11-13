@@ -39,7 +39,7 @@
     { name: '赭石', from: '#1a0d08', to: '#c2704a' },
     { name: '霞', from: '#2a0f2e', to: '#e08a5a' },
   ]
-  const PET_BUILD = '0.8.8'   // 面板里显示，用来确认浏览器拿到的是哪一版
+  const PET_BUILD = '0.8.9'   // 面板里显示，用来确认浏览器拿到的是哪一版
 
   // ————— 身形 / 眼睛微调：面板可调，存 localStorage —————
   const SHAPE_KEY = 'dsh-blob-pet-shape'
@@ -69,7 +69,7 @@
         return {
           width: clampNum(o.width, 16, 24, EYE_DEF.width),
           height: clampNum(o.height, 40, 56, EYE_DEF.height),
-          size: clampNum(o.size, 0.75, 1.05, EYE_DEF.size),
+          size: clampNum(o.size, 0.6, 1.5, EYE_DEF.size),
           angle: clampNum(o.angle, -15, 15, EYE_DEF.angle),
           x: clampNum(o.x, -40, 40, EYE_DEF.x),
           y: clampNum(o.y, -20, 20, EYE_DEF.y),
@@ -77,6 +77,16 @@
       }
       return { spacing: clampNum(raw.spacing, 20, 40, 35), left: side('left'), right: side('right') }
     } catch { return base() }
+  }
+  // 喂给引擎的眼睛参数：眼距跟着"放大倍数"同比拉开。
+  // 引擎里 Hee = min(Hee0*tuneW*tuneS, _ee/pulse)，_ee 正比于两眼间距，
+  // 所以只放大不拉间距时宽度会被上限夹死、只剩高度在长（就是那条细线）。
+  // 间距按 √倍数 拉开（1.5 倍眼 → 间距 ×1.22）：既把上限抬高，又不会把眼睛甩到剪影边缘。
+  // 上限 46 是实测剪影能吃下的最大间距（48 起右眼会贴边被裁）。
+  function eyeForEngine(t) {
+    const grow = Math.max(1, t.left.size, t.right.size)
+    const spacing = Math.min(46, Math.max(20, Math.round(t.spacing * Math.sqrt(grow))))
+    return { spacing, left: { ...t.left }, right: { ...t.right } }
   }
   // 全默认 = 不传 tune，让引擎走它原本的眼睛动画曲线（含细微游移）
   const isDefaultEye = (t) => {
@@ -207,7 +217,7 @@
       onChange(snap) { lastState = snap.state },
     })
     window.__blobBot = bot   // 调试入口
-    if (!isDefaultEye(eyeTune)) bot.setEyeTune(JSON.parse(JSON.stringify(eyeTune)))   // 上次调过的眼睛
+    if (!isDefaultEye(eyeTune)) bot.setEyeTune(JSON.parse(JSON.stringify(eyeForEngine(eyeTune))))   // 上次调过的眼睛
     // 渐变自检：控制台敲 __blobInk() 看当前墨色是不是 url(#渐变)
     window.__blobInk = () => ({ grad: !!bot.inkGrad, fill: bot.body.getAttribute('fill'),
       style: bot.body.style.fill, size: sizePx, scheme: lastScheme })
@@ -257,10 +267,10 @@
       + '<div class="bp-row"><span>渐变</span><input id="bp-c1" type="color"><em class="bp-sep">→</em><input id="bp-c2" type="color"><button class="bp-btn bp-mini" data-a="swap" type="button" title="对调两端">⇄</button></div>'
       + '<div class="bp-row bp-swatches">' + INK_PRESETS.map((q) => '<button class="bp-sw" type="button" data-f="' + q.from + '" data-t="' + q.to + '" title="' + q.name + '"></button>').join('') + '</div>'
       + '<div class="bp-row"><span>形状</span><select id="bp-shape">' + SHAPES.map((q) => '<option value="' + q[0] + '">' + q[1] + '</option>').join('') + '</select></div>'
-      + '<div class="bp-row bp-eyehead"><span>眼睛微调</span><em>上限保守：再大引擎会画歪</em></div>'
+      + '<div class="bp-row bp-eyehead"><span>眼睛微调</span><em>放大时眼距会自动跟着拉开</em></div>'
       + '<div class="bp-row"><span>眼距</span><input id="bp-gap" type="range" min="20" max="40" step="2"><b id="bp-gap-v"></b></div>'
       + '<div class="bp-row"><span>调哪只</span><button class="bp-btn bp-side" type="button" data-side="left">左</button><button class="bp-btn bp-side" type="button" data-side="right">右</button><button class="bp-btn bp-mini" type="button" data-a="eyereset">复位</button></div>'
-      + '<div class="bp-row"><span>眼大小</span><input id="bp-esize" type="range" min="75" max="105" step="1"><b id="bp-esize-v"></b></div>'
+      + '<div class="bp-row"><span>眼大小</span><input id="bp-esize" type="range" min="60" max="150" step="2"><b id="bp-esize-v"></b></div>'
       + '<div class="bp-row"><span>眼宽</span><input id="bp-ewidth" type="range" min="16" max="24" step="1"><b id="bp-ewidth-v"></b></div>'
       + '<div class="bp-row"><span>眼高</span><input id="bp-eheight" type="range" min="40" max="56" step="1"><b id="bp-eheight-v"></b></div>'
       + '<div class="bp-row"><span>眼斜角</span><input id="bp-eangle" type="range" min="-15" max="15" step="1"><b id="bp-eangle-v"></b></div>'
@@ -319,7 +329,7 @@
           shape: shapeName,
           grad: !!gradOn,
           ink: customInk,
-          eye: isDefaultEye(eyeTune) ? null : eyeTune,
+          eye: isDefaultEye(eyeTune) ? null : eyeForEngine(eyeTune),
         }
         try {
           fetch(LOOK_BASE + '/look', {
@@ -355,7 +365,7 @@
     // 所以不需要"静态模式"，调的时候看得见的就是平时那只眼睛。
     function applyEye() {
       try { localStorage.setItem(EYE_KEY, JSON.stringify(eyeTune)) } catch {}
-      bot.setEyeTune(isDefaultEye(eyeTune) ? null : JSON.parse(JSON.stringify(eyeTune)))
+      bot.setEyeTune(isDefaultEye(eyeTune) ? null : JSON.parse(JSON.stringify(eyeForEngine(eyeTune))))
       syncEye()
       pushLook()
     }
