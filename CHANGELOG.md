@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.7（2026-11-13）— 眼睛微调回来了，而且不再冻住动画
+- 关键发现：`web/grok/eyes.js` 的 `paintEyes()` 本来就吃 `opt.tune`（`eyes.js:51-58,86-95`）——
+  眼距按 `tune.spacing/35` 缩放眼间距、每只眼按 `width/height/size/angle/x/y` 缩放并旋转，
+  全部乘 `mix`。所以微调不必借用「捏住团子」的静态眼形分支（`blendCustomEyes`），
+  可以直接作用在**会动的那双眼睛**上：眨眼 / 眼形轮换 / 追踪都不受影响。
+- `web/grok/character.js`（团子补丁，1 处）：`paintEyes({...})` 参数里
+  `tune: null, manualHold: false, manualMix: 0` → `tune: this.eyeTune, manualHold: false,
+  manualMix: this.eyeTune ? 1 : 0`。
+- `web/pet.js`：面板「眼睛微调」6 行回归（眼距 / 左·右·复位 / 眼大小 / 眼宽 / 眼高 / 眼斜角），
+  写 `localStorage['dsh-blob-pet-eye']`；全默认时 `setEyeTune(null)`，保证默认外观与 0.8.6 逐字节一致。
+- 调过的参数**会一直生效**（不只是面板开着时）：面板开合不再切任何模式，团子始终在动画里。
+- 滑杆收进安全区间（引擎公式在极端值下会把眼睛拉成细线 / 甩到身体外）：
+  眼距 20–60、眼大小 75%–135%、眼宽 16–26、眼高 40–60、眼斜角 ±25°；读旧数据也按同样区间夹。
+- 实测：面板开 `hold:false`、`distinct900`（900 帧里不同的眼睛 d 值）tune 后 228 / 关面板 283 → 动画照旧；
+  重载后 `bot.eyeTune = {spacing:48, left.size:1.2}` 且 `distinct900 = 132`；smoke / native-smoke / host-test 全绿。
+- VERSION bump 0.8.6 → 0.8.7。
+
 ## 0.8.6（2026-11-12）— 撤回眼睛微调，只留换身形
 - 0.8.5 的眼睛微调会让团子的眼睛**彻底不动**：引擎里那套「单眼微调」是把手动捏住团子时
   才走的分支（`blendCustomEyes`），它画的是按参数投影出来的静态眼形，我用

@@ -39,10 +39,11 @@
     { name: '赭石', from: '#1a0d08', to: '#c2704a' },
     { name: '霞', from: '#2a0f2e', to: '#e08a5a' },
   ]
-  const PET_BUILD = '0.8.6'   // 面板里显示，用来确认浏览器拿到的是哪一版
+  const PET_BUILD = '0.8.7'   // 面板里显示，用来确认浏览器拿到的是哪一版
 
-  // ————— 身形：面板可调，存 localStorage —————
+  // ————— 身形 / 眼睛微调：面板可调，存 localStorage —————
   const SHAPE_KEY = 'dsh-blob-pet-shape'
+  const EYE_KEY = 'dsh-blob-pet-eye'
   const SHAPES = [
     ['blob', '团子'], ['pebble', '卵石'], ['bean', '豆子'], ['egg', '蛋'],
     ['squircle', '方圆'], ['tablet', '药片'], ['capsule', '胶囊'], ['cylinder', '圆柱'],
@@ -50,6 +51,38 @@
     ['shield', '盾牌'], ['dome', '圆顶'], ['arch', '拱门'], ['cloud', '云朵'],
     ['teardrop', '水滴'], ['leaf', '叶子'],
   ]
+  // 单眼微调的默认值（跟引擎 eyes.js 的 DEFAULT_EYE 对齐）
+  const EYE_DEF = { width: 20, height: 50, size: 1, angle: 0, x: 0, y: -7 }
+  function clampNum(v, lo, hi, dflt) {
+    const v2 = Number(v)
+    if (!Number.isFinite(v2)) return dflt
+    return Math.min(hi, Math.max(lo, v2))
+  }
+  function readEye() {
+    const base = () => ({ spacing: 35, left: { ...EYE_DEF }, right: { ...EYE_DEF } })
+    try {
+      const raw = JSON.parse(localStorage.getItem(EYE_KEY) || 'null')
+      if (!raw) return base()
+      const side = (k) => {
+        const o = raw[k] || {}
+        // 只在"看起来不坏"的区间里取值：超出范围引擎会把眼睛拉成细线 / 甩出身体
+        return {
+          width: clampNum(o.width, 16, 26, EYE_DEF.width),
+          height: clampNum(o.height, 40, 60, EYE_DEF.height),
+          size: clampNum(o.size, 0.75, 1.35, EYE_DEF.size),
+          angle: clampNum(o.angle, -25, 25, EYE_DEF.angle),
+          x: clampNum(o.x, -40, 40, EYE_DEF.x),
+          y: clampNum(o.y, -20, 20, EYE_DEF.y),
+        }
+      }
+      return { spacing: clampNum(raw.spacing, 20, 60, 35), left: side('left'), right: side('right') }
+    } catch { return base() }
+  }
+  // 全默认 = 不传 tune，让引擎走它原本的眼睛动画曲线（含细微游移）
+  const isDefaultEye = (t) => {
+    const same = (a) => ['width', 'height', 'size', 'angle', 'x', 'y'].every((k) => a[k] === EYE_DEF[k])
+    return t.spacing === 35 && same(t.left) && same(t.right)
+  }
   function readShape() {
     try {
       const v = localStorage.getItem(SHAPE_KEY)
@@ -58,6 +91,7 @@
     return 'blob'
   }
   let shapeName = readShape()
+  let eyeTune = readEye()
 
   // ————— 样式与容器（GUI 页注入模式） —————
   const style = document.createElement('style')
@@ -100,6 +134,10 @@
   #bp-menu{max-height:min(74vh,470px);overflow-y:auto}
   #bp-menu select{flex:1;min-width:0;font:inherit;color:inherit;background:transparent;
     border:1px solid rgba(128,128,128,.45);border-radius:7px;padding:2px 4px;cursor:pointer}
+  #bp-menu .bp-side{flex:0 0 auto;padding:2px 10px;line-height:1.35}
+  #bp-menu .bp-side.bp-on-side{background:var(--bp-ink,#17181c);color:var(--bp-paper,#fff);border-color:transparent}
+  #bp-menu .bp-eyehead{margin-top:8px;padding-top:8px;border-top:1px solid rgba(128,128,128,.25)}
+  #bp-menu .bp-eyehead em{font-style:normal;font-size:11px;opacity:.6;margin-left:auto}
   #bp-menu .bp-actions{justify-content:space-between;margin-top:10px}
   #bp-menu .bp-btn{padding:3px 10px;border-radius:8px;border:1px solid rgba(128,128,128,.45);
     background:transparent;color:inherit;font:inherit;cursor:pointer}
@@ -169,6 +207,7 @@
       onChange(snap) { lastState = snap.state },
     })
     window.__blobBot = bot   // 调试入口
+    if (!isDefaultEye(eyeTune)) bot.setEyeTune(JSON.parse(JSON.stringify(eyeTune)))   // 上次调过的眼睛
     // 渐变自检：控制台敲 __blobInk() 看当前墨色是不是 url(#渐变)
     window.__blobInk = () => ({ grad: !!bot.inkGrad, fill: bot.body.getAttribute('fill'),
       style: bot.body.style.fill, size: sizePx, scheme: lastScheme })
@@ -218,6 +257,13 @@
       + '<div class="bp-row"><span>渐变</span><input id="bp-c1" type="color"><em class="bp-sep">→</em><input id="bp-c2" type="color"><button class="bp-btn bp-mini" data-a="swap" type="button" title="对调两端">⇄</button></div>'
       + '<div class="bp-row bp-swatches">' + INK_PRESETS.map((q) => '<button class="bp-sw" type="button" data-f="' + q.from + '" data-t="' + q.to + '" title="' + q.name + '"></button>').join('') + '</div>'
       + '<div class="bp-row"><span>形状</span><select id="bp-shape">' + SHAPES.map((q) => '<option value="' + q[0] + '">' + q[1] + '</option>').join('') + '</select></div>'
+      + '<div class="bp-row bp-eyehead"><span>眼睛微调</span><em>太夸张会被身体裁掉</em></div>'
+      + '<div class="bp-row"><span>眼距</span><input id="bp-gap" type="range" min="20" max="60" step="2"><b id="bp-gap-v"></b></div>'
+      + '<div class="bp-row"><span>调哪只</span><button class="bp-btn bp-side" type="button" data-side="left">左</button><button class="bp-btn bp-side" type="button" data-side="right">右</button><button class="bp-btn bp-mini" type="button" data-a="eyereset">复位</button></div>'
+      + '<div class="bp-row"><span>眼大小</span><input id="bp-esize" type="range" min="75" max="135" step="1"><b id="bp-esize-v"></b></div>'
+      + '<div class="bp-row"><span>眼宽</span><input id="bp-ewidth" type="range" min="16" max="26" step="1"><b id="bp-ewidth-v"></b></div>'
+      + '<div class="bp-row"><span>眼高</span><input id="bp-eheight" type="range" min="40" max="60" step="1"><b id="bp-eheight-v"></b></div>'
+      + '<div class="bp-row"><span>眼斜角</span><input id="bp-eangle" type="range" min="-25" max="25" step="1"><b id="bp-eangle-v"></b></div>'
       + '<div class="bp-row"><span>主题渐变</span><button class="bp-tog" data-k="grad" type="button"></button></div>'
       + '<div class="bp-row"><span>跟随鼠标</span><button class="bp-tog" data-k="follow" type="button"></button></div>'
       + '<div class="bp-row bp-actions"><button class="bp-btn" data-a="reset" type="button">恢复默认</button>'
@@ -233,6 +279,17 @@
     const sizeInput = menu.querySelector('#bp-size')
     const sizeVal = menu.querySelector('#bp-size-v')
     const shapeSel = menu.querySelector('#bp-shape')
+    const gapInput = menu.querySelector('#bp-gap')
+    const gapVal = menu.querySelector('#bp-gap-v')
+    const eSize = menu.querySelector('#bp-esize')
+    const eSizeV = menu.querySelector('#bp-esize-v')
+    const eW = menu.querySelector('#bp-ewidth')
+    const eWV = menu.querySelector('#bp-ewidth-v')
+    const eH = menu.querySelector('#bp-eheight')
+    const eHV = menu.querySelector('#bp-eheight-v')
+    const eA = menu.querySelector('#bp-eangle')
+    const eAV = menu.querySelector('#bp-eangle-v')
+    let eyeSide = 'left'
     function syncToggles() {
       menu.querySelectorAll('.bp-tog').forEach((b) => {
         const on = b.dataset.k === 'grad' ? gradOn : followOn
@@ -259,6 +316,23 @@
       syncColors()
     }
     function syncShape() { shapeSel.value = shapeName }
+    function syncEye() {
+      const L = eyeTune[eyeSide]
+      gapInput.value = String(eyeTune.spacing); gapVal.textContent = String(eyeTune.spacing)
+      const pct = Math.round(L.size * 100)
+      eSize.value = String(pct); eSizeV.textContent = pct + '%'
+      eW.value = String(L.width); eWV.textContent = String(L.width)
+      eH.value = String(L.height); eHV.textContent = String(L.height)
+      eA.value = String(L.angle); eAV.textContent = (L.angle > 0 ? '+' : '') + L.angle + '°'
+      menu.querySelectorAll('.bp-side').forEach((b) => b.classList.toggle('bp-on-side', b.dataset.side === eyeSide))
+    }
+    // 微调直接喂给引擎的 paintEyes（它本来就支持 tune），眨眼/眼形轮换/追踪全保留，
+    // 所以不需要"静态模式"，调的时候看得见的就是平时那只眼睛。
+    function applyEye() {
+      try { localStorage.setItem(EYE_KEY, JSON.stringify(eyeTune)) } catch {}
+      bot.setEyeTune(isDefaultEye(eyeTune) ? null : JSON.parse(JSON.stringify(eyeTune)))
+      syncEye()
+    }
     function setShapeNow(name) {
       shapeName = name
       try { localStorage.setItem(SHAPE_KEY, name) } catch {}
@@ -269,7 +343,7 @@
       menu.classList.toggle('bp-open', !!on)
       if (on) {
         sizeInput.value = String(sizePx); sizeVal.textContent = String(sizePx)
-        syncToggles(); syncColors(); syncShape()
+        syncToggles(); syncColors(); syncShape(); syncEye()
         // 贴近屏幕顶端时翻到下方展开，避免面板被裁掉
         menu.style.top = ''; menu.style.bottom = ''
         if (menu.getBoundingClientRect().top < 8) {
@@ -288,6 +362,11 @@
     }
     sizeInput.addEventListener('input', () => setSizeNow(Number(sizeInput.value)))
     shapeSel.addEventListener('change', () => setShapeNow(shapeSel.value))
+    gapInput.addEventListener('input', () => { eyeTune.spacing = Number(gapInput.value); applyEye() })
+    eSize.addEventListener('input', () => { eyeTune[eyeSide].size = Number(eSize.value) / 100; applyEye() })
+    eW.addEventListener('input', () => { eyeTune[eyeSide].width = Number(eW.value); applyEye() })
+    eH.addEventListener('input', () => { eyeTune[eyeSide].height = Number(eH.value); applyEye() })
+    eA.addEventListener('input', () => { eyeTune[eyeSide].angle = Number(eA.value); applyEye() })
     c1.addEventListener('input', () => applyInk({ from: c1.value, to: c2.value }))
     c2.addEventListener('input', () => applyInk({ from: c1.value, to: c2.value }))
     menu.addEventListener('click', (e) => {
@@ -305,11 +384,19 @@
         syncToggles()
         return
       }
+      const side = e.target.closest('.bp-side')
+      if (side) { eyeSide = side.dataset.side; syncEye(); return }
       const sw = e.target.closest('.bp-sw')
       if (sw) { applyInk({ from: sw.dataset.f, to: sw.dataset.t }); return }
       const act = e.target.closest('.bp-btn')
       if (!act) return
       if (act.dataset.a === 'swap') { applyInk({ from: c2.value, to: c1.value }); return }
+      if (act.dataset.a === 'eyereset') {
+        eyeTune[eyeSide] = { ...EYE_DEF }
+        applyEye()
+        setLabel('这只眼睛复位', 1200)
+        return
+      }
       if (act.dataset.a === 'reset') {
         setSizeNow(90)
         gradOn = true; followOn = true
@@ -317,6 +404,8 @@
         try { localStorage.removeItem(INK_KEY) } catch {}
         writeFlag(GRAD_KEY, true); writeFlag(FOLLOW_KEY, true)
         bot.setInkGrad(inkFor(lastScheme)); bot.setFollowPointer(true)
+        eyeTune = { spacing: 35, left: { ...EYE_DEF }, right: { ...EYE_DEF } }
+        applyEye()
         setShapeNow('blob')
         syncToggles()
       } else if (act.dataset.a === 'hide') {
@@ -505,6 +594,7 @@
     box.addEventListener('pointerdown', (e) => {
       if (e.button === 2) return                // 右键留给设置面板
       if (menu.contains(e.target)) return        // 面板上的按下不拖团子
+      if (menu.classList.contains('bp-open')) { closeMenu(); return }   // 面板开着：点团子=收面板
       if (e.target === hide) return
       drag = { x: e.clientX, y: e.clientY, moved: false, rect: box.getBoundingClientRect() }
       box.setPointerCapture(e.pointerId)

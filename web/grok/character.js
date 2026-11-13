@@ -1399,9 +1399,9 @@
         top: faceTop,
         bottom: faceBottom,
         emphasisBlend: this.emphasisBlend,
-        tune: null,
+        tune: this.eyeTune,                 // 团子补丁：面板调过的单眼参数
         manualHold: false,
-        manualMix: 0,
+        manualMix: this.eyeTune ? 1 : 0,    // 有微调就让 paintEyes 按参数画（动画照旧）
       });
       if (holdMix > 0.002) {
         // Eye-sphere rim = visible head half-width in overlay units, so the
