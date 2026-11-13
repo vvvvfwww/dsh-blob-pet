@@ -147,6 +147,29 @@ function createEngine(root, opts = {}) {
     keepBody: true,
   })
 
+  // 主题渐变默认值（与 web/pet.js、render-bridge.cjs 同一套）
+  const inkFor = (sc) => sc === 'dark'
+    ? { from: '#0b0c10', to: '#8f97a2', angle: 0 }
+    : { from: '#000000', to: '#5b6070', angle: 0 }
+  bot.setInkGrad(inkFor(scheme))
+
+  // ——— 外观（~/.dsh/blob-pet-look.json：GUI 面板改完写文件，宿主创建引擎后先套一次） ———
+  function applyLook(v) {
+    if (!v || typeof v !== 'object') return
+    if (typeof v.size === 'number' && Number.isFinite(v.size)) {
+      try { bot.setSize(Math.max(60, Math.min(200, Math.round(v.size)))) } catch {}
+    }
+    if (typeof v.shape === 'string' && v.shape) { try { bot.setShape(v.shape) } catch {} }
+    if (v.grad === false) {
+      try { bot.setInkGrad(null) } catch {}
+    } else if (v.ink && typeof v.ink === 'object' && v.ink.from && v.ink.to) {
+      try { bot.setInkGrad({ from: String(v.ink.from), to: String(v.ink.to), angle: Number(v.ink.angle) || 0 }) } catch {}
+    } else if (v.grad === true) {
+      try { bot.setInkGrad(inkFor(scheme)) } catch {}
+    }
+    if (v.eye !== undefined) { try { bot.setEyeTune(v.eye || null) } catch {} }
+  }
+
   function vars() {
     const s = svg.style._map || {}
     const raw = { '--fg': s['--fg'] || '#000', '--ink': s['--ink'] || '#fff', '--bg': s['--bg'] || '#fff' }
@@ -331,6 +354,10 @@ function createEngine(root, opts = {}) {
     } else if (c.cmd === 'scheme' && c.value !== scheme) {
       scheme = c.value
       bot.setColor(bot.colorId, scheme)
+    } else if (c.cmd === 'look') {
+      let v = c.value
+      if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = null } }
+      applyLook(v)
     }
   }
 

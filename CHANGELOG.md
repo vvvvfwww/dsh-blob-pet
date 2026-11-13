@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.8（2026-11-13）— 面板外观同步到原生桌面窗
+- 以前面板只管网页团子，原生窗永远固定 `blob` + 默认渐变。现在两边共用一份外观：
+  - 面板改大小/身形/墨色/渐变开关/眼睛 → `POST /blob-pet/look`（`web/pet.js` 里 400ms 防抖合并）；
+  - 宿主写 `~/.dsh/blob-pet-look.json` 并立刻 `cmd({cmd:'look'})` 套到宿主内引擎（`lib/index.js`）；
+  - `tools/render-bridge.cjs` 每秒比对文件 mtime，变了就 `applyLook()` —— 原生窗跟着变，不用重启；
+  - 引擎创建时先读一次文件，重启不丢外观。
+- `applyLook()` 语义：`size`（60–200 夹紧）/ `shape` / `ink`（`{from,to,angle}`）/ `grad`
+  （`false` = `setInkGrad(null)` 回纯色，`true` 且没自定义色 = 主题默认渐变）/ `eye`（`null` = 恢复默认）。
+- 新增 GUI 路由 `GET|POST /blob-pet/look`；sidecar 侧仍走 `/cmd?c=look&v=<json>`。
+- 原生窗的尺寸**不受**面板「大小」影响：窗口尺寸由滚轮单独调（存 `blob-pet-view.json`），
+  实测 `setSize()` 只改 `sizePx`/CSS transform，桥序列化出的 `viewBox` 恒定 `-60 -85 349 354`，
+  所以 size 传过去在原生侧是无害的空操作（保留在文件里只为状态完整）。
+- 测试：`tools/host-test.cjs` 增加 look 路由断言（GET 200 / POST 写文件且 shape、size、ink 落盘），
+  look 文件走临时路径不碰真实外观；bridge 端到端验证身形 `blob→egg` 变化、自定义墨色进 `stop-color`、
+  `grad:false` 后身体 `fill` 回到 `#000000`；网页侧验证启动推一次、滚轮/改身形/选色/拖眼距都会合并推送。
+
 ## 0.8.7（2026-11-13）— 眼睛微调回来了，而且不再冻住动画
 - 关键发现：`web/grok/eyes.js` 的 `paintEyes()` 本来就吃 `opt.tune`（`eyes.js:51-58,86-95`）——
   眼距按 `tune.spacing/35` 缩放眼间距、每只眼按 `width/height/size/angle/x/y` 缩放并旋转，

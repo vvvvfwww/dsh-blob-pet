@@ -1,7 +1,7 @@
 // native 引擎托管桥：grok 引擎 + 事件→状态映射都在这（与 web/pet.js 同一份表），
 // stdout 每 33ms 一行 JSON {svg,label,labelMs,state}，stdin 收事件/命令 JSON 行。
 // 协议：
-//   stdin → {"ev":{...SSE帧...}} | {"cmd":"pet"} | {"cmd":"scheme","value":"dark|light"} | {"cmd":"quit"}
+//   stdin → {"ev":{...SSE帧...}} | {"cmd":"pet"} | {"cmd":"scheme","value":"dark|light"} | {"cmd":"look","value":{size,shape,ink,eye}} | {"cmd":"quit"}
 //   stdout ← {"svg":"<svg…>","label":"正在跑命令","labelMs":5000,"state":"working"}
 const fs = require('fs')
 const path = require('path')
@@ -134,6 +134,37 @@ const inkFor = (sc) => sc === 'dark'
   ? { from: '#101116', to: '#6d7279', angle: 0 }
   : { from: '#0a0b0d', to: '#43464e', angle: 0 }
 bot.setInkGrad(inkFor(scheme))
+
+// ——— 外观同步：宿主把 GUI 面板的改动写进 ~/.dsh/blob-pet-look.json，这里轮询文件套用 ———
+const LOOK_FILE = process.env.BLOB_PET_LOOK_FILE || path.join(
+  process.env.DSH_HOME || path.join(require('os').homedir(), '.dsh'), 'blob-pet-look.json',
+)
+let lookMtime = -1
+function applyLook(v) {
+  if (!v || typeof v !== 'object') return
+  if (typeof v.size === 'number' && Number.isFinite(v.size)) {
+    try { bot.setSize(Math.max(60, Math.min(200, Math.round(v.size)))) } catch {}
+  }
+  if (typeof v.shape === 'string' && v.shape) { try { bot.setShape(v.shape) } catch {} }
+  if (v.grad === false) {
+    try { bot.setInkGrad(null) } catch {}          // 关掉渐变 = 纯色墨
+  } else if (v.ink && typeof v.ink === 'object' && v.ink.from && v.ink.to) {
+    try { bot.setInkGrad({ from: String(v.ink.from), to: String(v.ink.to), angle: Number(v.ink.angle) || 0 }) } catch {}
+  } else if (v.grad === true) {
+    try { bot.setInkGrad(inkFor(scheme)) } catch {}
+  }
+  if (v.eye !== undefined) { try { bot.setEyeTune(v.eye || null) } catch {} }
+}
+function pollLook(force) {
+  let mt = 0
+  try { mt = fs.statSync(LOOK_FILE).mtimeMs } catch { return }
+  if (!force && mt === lookMtime) return
+  lookMtime = mt
+  let j = null
+  try { j = JSON.parse(fs.readFileSync(LOOK_FILE, 'utf8')) } catch { return }
+  applyLook(j)
+}
+pollLook(true)
 function vars() {
   const s = svg.style._map || {}
   const raw = { '--fg': s['--fg'] || '#000', '--ink': s['--ink'] || '#fff', '--bg': s['--bg'] || '#fff' }
@@ -281,6 +312,10 @@ function cmd(c) {
     scheme = c.value
     bot.setColor(bot.colorId, scheme)
     bot.setInkGrad(inkFor(scheme))
+  } else if (c.cmd === 'look') {
+    let v = c.value
+    if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = null } }
+    applyLook(v)
   }
 }
 
@@ -296,8 +331,10 @@ function sleepTick(now) {
 
 // ——— 主循环：30fps 泵 rAF + 出帧 ———
 let out = process.stdout
+let lookCheckedAt = 0
 function frame() {
   const now = Date.now()
+  if (now - lookCheckedAt > 1000) { lookCheckedAt = now; try { pollLook(false) } catch {} }
   sleepTick(now)
   if (S.label && now > S.labelUntil) { S.label = '' }
   const q = rafQ; rafQ = []

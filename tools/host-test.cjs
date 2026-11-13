@@ -31,6 +31,9 @@ function onceData(req, ms) {
   const backup = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath) : null
   // 预设 cfg：钉测试端口；关掉自动开窗（别真拉起原生窗）；开 GUI 注入以测通道
   fs.writeFileSync(cfgPath, JSON.stringify({ port: 39217, petWindow: false, gui: true }))
+  // 外观文件走临时路径，别把用户真实外观写坏
+  process.env.BLOB_PET_LOOK_FILE = path.join(require('os').tmpdir(), 'blob-pet-look-test-' + process.pid + '.json')
+  try { fs.unlinkSync(process.env.BLOB_PET_LOOK_FILE) } catch {}
   const mod = (await import('file:///' + path.resolve('lib/index.js').replace(/\\/g, '/'))).default
   // ——— 假 ctx ———
   const handlers = {}
@@ -70,6 +73,30 @@ function onceData(req, ms) {
   console.log('GUI grok/math.js:', gr.code, gr.body.length)
   const gal = await fire('/blob-pet/gallery')
   console.log('GUI gallery:', gal.code, gal.body.length)
+  // 外观同步：GET 读；POST 写文件 + 套到宿主内引擎
+  const lookGet = await fire('/blob-pet/look')
+  console.log('GUI look GET:', lookGet.code, lookGet.body.slice(0, 80))
+  const postLook = async (obj) => {
+    const r = registered.find((x) => x.kind === 'exact' && x.path === '/blob-pet/look')
+    if (!r) return { code: -1 }
+    const evs = {}
+    const req = {
+      url: '/blob-pet/look', method: 'POST',
+      on(ev, fn) { (evs[ev] = evs[ev] || []).push(fn); return req },
+      destroy() {},
+    }
+    const res = { writes: [], writeHead(c) { this.code = c }, setHeader() {}, end(x) { if (x) this.writes.push(String(x)) }, write(x) { this.writes.push(String(x)) } }
+    const done = r.handler(req, res)
+    await new Promise((r2) => setTimeout(r2, 0))
+    ;(evs.data || []).forEach((f) => f(Buffer.from(JSON.stringify(obj))))
+    ;(evs.end || []).forEach((f) => f())
+    await done
+    return { code: res.code, body: res.writes.join('') }
+  }
+  const lookPost = await postLook({ size: 132, shape: 'egg', grad: true, ink: { from: '#061021', to: '#4f7fc4', angle: 0 } })
+  let lookFile = {}
+  try { lookFile = JSON.parse(fs.readFileSync(process.env.BLOB_PET_LOOK_FILE || path.join(process.env.USERPROFILE || process.env.HOME, '.dsh', 'blob-pet-look.json'), 'utf8')) } catch {}
+  console.log('GUI look POST:', lookPost.code, '| file shape:', lookFile.shape, 'size:', lookFile.size, '| ink:', lookFile.ink && lookFile.ink.from)
   const injectHtml = handlers.tapIndex('<html><body></body></html>')
   console.log('tapIndex injects:', injectHtml.includes('/blob-pet/pet.js'))
 

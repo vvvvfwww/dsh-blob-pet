@@ -39,7 +39,7 @@
     { name: '赭石', from: '#1a0d08', to: '#c2704a' },
     { name: '霞', from: '#2a0f2e', to: '#e08a5a' },
   ]
-  const PET_BUILD = '0.8.7'   // 面板里显示，用来确认浏览器拿到的是哪一版
+  const PET_BUILD = '0.8.8'   // 面板里显示，用来确认浏览器拿到的是哪一版
 
   // ————— 身形 / 眼睛微调：面板可调，存 localStorage —————
   const SHAPE_KEY = 'dsh-blob-pet-shape'
@@ -306,6 +306,30 @@
         b.classList.toggle('bp-on-sw', b.dataset.f.toLowerCase() === spec.from.toLowerCase() && b.dataset.t.toLowerCase() === spec.to.toLowerCase())
       })
     }
+    // 外观同步：面板改完把 大小/身形/墨色/渐变开关/眼睛 推给宿主，
+    // 宿主写 ~/.dsh/blob-pet-look.json 并立刻套到引擎，原生桌面窗的渲染桥轮询同一份文件。
+    const LOOK_BASE = (window.__BLOB_PET_BOOT__ && window.__BLOB_PET_BOOT__.base) || '/blob-pet'
+    let lookTimer = 0
+    function pushLook() {
+      clearTimeout(lookTimer)
+      lookTimer = setTimeout(() => {
+        if (typeof fetch !== 'function') return
+        const body = {
+          size: sizePx,
+          shape: shapeName,
+          grad: !!gradOn,
+          ink: customInk,
+          eye: isDefaultEye(eyeTune) ? null : eyeTune,
+        }
+        try {
+          fetch(LOOK_BASE + '/look', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }).catch(() => {})
+        } catch {}
+      }, 400)
+    }
     function applyInk(spec) {
       customInk = { from: spec.from, to: spec.to, angle: 0 }
       try { localStorage.setItem(INK_KEY, JSON.stringify(customInk)) } catch {}
@@ -314,6 +338,7 @@
       bot.setInkGrad(customInk)
       syncToggles()
       syncColors()
+      pushLook()
     }
     function syncShape() { shapeSel.value = shapeName }
     function syncEye() {
@@ -332,12 +357,14 @@
       try { localStorage.setItem(EYE_KEY, JSON.stringify(eyeTune)) } catch {}
       bot.setEyeTune(isDefaultEye(eyeTune) ? null : JSON.parse(JSON.stringify(eyeTune)))
       syncEye()
+      pushLook()
     }
     function setShapeNow(name) {
       shapeName = name
       try { localStorage.setItem(SHAPE_KEY, name) } catch {}
       bot.setShape(name)
       syncShape()
+      pushLook()
     }
     function openMenu(on) {
       menu.classList.toggle('bp-open', !!on)
@@ -359,6 +386,7 @@
       try { localStorage.setItem(SIZE_KEY, String(sizePx)) } catch {}
       sizeInput.value = String(sizePx)
       sizeVal.textContent = String(sizePx)
+      pushLook()
     }
     sizeInput.addEventListener('input', () => setSizeNow(Number(sizeInput.value)))
     shapeSel.addEventListener('change', () => setShapeNow(shapeSel.value))
@@ -376,6 +404,7 @@
           gradOn = !gradOn
           writeFlag(GRAD_KEY, gradOn)
           bot.setInkGrad(gradOn ? inkFor(lastScheme) : null)
+          pushLook()
         } else {
           followOn = !followOn
           writeFlag(FOLLOW_KEY, followOn)
@@ -404,6 +433,7 @@
         try { localStorage.removeItem(INK_KEY) } catch {}
         writeFlag(GRAD_KEY, true); writeFlag(FOLLOW_KEY, true)
         bot.setInkGrad(inkFor(lastScheme)); bot.setFollowPointer(true)
+        pushLook()
         eyeTune = { spacing: 35, left: { ...EYE_DEF }, right: { ...EYE_DEF } }
         applyEye()
         setShapeNow('blob')
@@ -656,5 +686,6 @@
     }
     connect()
     armIdle()
+    pushLook()   // 启动同步一次：让原生桌面窗跟上网页这边的外观
   }
 })()
