@@ -142,16 +142,13 @@ node tools/native-smoke.cjs # 端到端无头回归：engine-core → render-bri
 node tools/render-bridge.cjs --bench  # 序列化性能基准（基线约 0.15ms/帧）
 ```
 
-## ⚠️ 版权边界（务必读）
+## 🙏 致谢
 
-本仓库**公开留档，但仅供个人学习使用**。`web/grok/` 目录下的几何数据、形状
-路径、眼睛多边形与表情数据**提取自 xAI Grok Bot 应用包（app.asar）**，**归
-xAI / 相应权利人所有**，不适用本仓库的 MIT 许可（见 LICENSE 双层声明）：
+形象引擎来自 **[blessonism/grok-icon-study](https://github.com/blessonism/grok-icon-study)**
+的复刻实现——`web/grok/` 下的几何数据、25 套眼睛、18 种身形、表情轮换表、弹簧参数、
+1200ms 登录轮换节奏都出自那里，**感谢作者整理并分享这些素材**。
 
-- **仅限个人学习研究**，请勿商用、勿再分发、勿当作原创素材发布；
-- 本插件设计为**仅本机使用**，上传 GitHub 只为个人代码留档，**不代表授权公开
-  分发**这些提取资产；
-- 引擎外壳代码（character.js / pose.js / fx.js 等对提取数据的编排）与本插件的
-  `lib/`、`tools/` 为原创，适用 MIT。
+本仓库保留引擎源码原样（唯一改动是 `keepBody` 开关，见「实现分工」），
+本项目自己的外壳（`lib/`、`tools/`、`web/pet.js`）以 MIT 许可发布。
 
-若你要公开分发或分享给他人，**必须把 `web/grok/` 整体替换回原创绘制的数据**。
+想复用这套素材的话，也请到上游仓库注明出处、遵守作者的说明。

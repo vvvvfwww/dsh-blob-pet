@@ -3,7 +3,7 @@
  *   1. DSH 插件宿主进程（lib/index.js）：node:vm 沙箱跑引擎，帧走 sidecar /frames
  *   2. CLI（render-bridge.cjs）：独立进程模式，native-smoke 回归用
  * createEngine(root) → { ev, cmd, frame, state }
- * 引擎源码 web/grok/*.js 原样未改；素材归 xAI/原权利人，仅本机学习。
+ * 引擎源码 web/grok/*.js 原样未改（来自 blessonism/grok-icon-study，致谢）。
  */
 const fs = require('fs')
 const path = require('path')

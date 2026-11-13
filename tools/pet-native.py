@@ -10,7 +10,7 @@
   - SSE 连续失败超过 6 次（DSH 没在跑）→ 退出。
   - 拖窗=移动；点一下=摸头（发 {"cmd":"pet"} 给桥）；双击=隐藏到下次启动。
 
-仅供本机个人学习使用；形象数据归 xAI/原权利人。
+形象数据来自 grok-icon-study（https://github.com/blessonism/grok-icon-study），感谢作者分享。
 """
 import argparse
 import ctypes

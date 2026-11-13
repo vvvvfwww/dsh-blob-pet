@@ -4,7 +4,8 @@
  * 形象引擎完全使用 blessonism/grok-icon-study 的复刻实现（web/grok/ 八个文件：
  * geometry-data / math / tables / pose / tricks / fx / eyes / character）。
  * 几何数据、25 套眼睛、18 种身形、表情轮换表、弹簧参数、1200ms 登录轮换节奏
- * 全部来自该仓库，未做任何修改。仅供个人学习使用，素材归 xAI/原仓库权利人所有。
+ * 全部来自该仓库，未做任何修改。感谢 blessonism 分享素材
+ * （https://github.com/blessonism/grok-icon-study）。
  *
  * 本文件只做三件事（引擎脚本由宿主拼在本文件之前）：
  *   1. 建一个固定右下角的容器并 new GrokCharacter（blob / black / 登录页参数）；
