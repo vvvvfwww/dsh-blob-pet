@@ -67,15 +67,15 @@
         const o = raw[k] || {}
         // 只在"看起来不坏"的区间里取值：超出范围引擎会把眼睛拉成细线 / 甩出身体
         return {
-          width: clampNum(o.width, 16, 26, EYE_DEF.width),
-          height: clampNum(o.height, 40, 60, EYE_DEF.height),
-          size: clampNum(o.size, 0.75, 1.35, EYE_DEF.size),
-          angle: clampNum(o.angle, -25, 25, EYE_DEF.angle),
+          width: clampNum(o.width, 16, 24, EYE_DEF.width),
+          height: clampNum(o.height, 40, 56, EYE_DEF.height),
+          size: clampNum(o.size, 0.75, 1.05, EYE_DEF.size),
+          angle: clampNum(o.angle, -15, 15, EYE_DEF.angle),
           x: clampNum(o.x, -40, 40, EYE_DEF.x),
           y: clampNum(o.y, -20, 20, EYE_DEF.y),
         }
       }
-      return { spacing: clampNum(raw.spacing, 20, 60, 35), left: side('left'), right: side('right') }
+      return { spacing: clampNum(raw.spacing, 20, 40, 35), left: side('left'), right: side('right') }
     } catch { return base() }
   }
   // 全默认 = 不传 tune，让引擎走它原本的眼睛动画曲线（含细微游移）
@@ -257,13 +257,13 @@
       + '<div class="bp-row"><span>渐变</span><input id="bp-c1" type="color"><em class="bp-sep">→</em><input id="bp-c2" type="color"><button class="bp-btn bp-mini" data-a="swap" type="button" title="对调两端">⇄</button></div>'
       + '<div class="bp-row bp-swatches">' + INK_PRESETS.map((q) => '<button class="bp-sw" type="button" data-f="' + q.from + '" data-t="' + q.to + '" title="' + q.name + '"></button>').join('') + '</div>'
       + '<div class="bp-row"><span>形状</span><select id="bp-shape">' + SHAPES.map((q) => '<option value="' + q[0] + '">' + q[1] + '</option>').join('') + '</select></div>'
-      + '<div class="bp-row bp-eyehead"><span>眼睛微调</span><em>太夸张会被身体裁掉</em></div>'
-      + '<div class="bp-row"><span>眼距</span><input id="bp-gap" type="range" min="20" max="60" step="2"><b id="bp-gap-v"></b></div>'
+      + '<div class="bp-row bp-eyehead"><span>眼睛微调</span><em>上限保守：再大引擎会画歪</em></div>'
+      + '<div class="bp-row"><span>眼距</span><input id="bp-gap" type="range" min="20" max="40" step="2"><b id="bp-gap-v"></b></div>'
       + '<div class="bp-row"><span>调哪只</span><button class="bp-btn bp-side" type="button" data-side="left">左</button><button class="bp-btn bp-side" type="button" data-side="right">右</button><button class="bp-btn bp-mini" type="button" data-a="eyereset">复位</button></div>'
-      + '<div class="bp-row"><span>眼大小</span><input id="bp-esize" type="range" min="75" max="135" step="1"><b id="bp-esize-v"></b></div>'
-      + '<div class="bp-row"><span>眼宽</span><input id="bp-ewidth" type="range" min="16" max="26" step="1"><b id="bp-ewidth-v"></b></div>'
-      + '<div class="bp-row"><span>眼高</span><input id="bp-eheight" type="range" min="40" max="60" step="1"><b id="bp-eheight-v"></b></div>'
-      + '<div class="bp-row"><span>眼斜角</span><input id="bp-eangle" type="range" min="-25" max="25" step="1"><b id="bp-eangle-v"></b></div>'
+      + '<div class="bp-row"><span>眼大小</span><input id="bp-esize" type="range" min="75" max="105" step="1"><b id="bp-esize-v"></b></div>'
+      + '<div class="bp-row"><span>眼宽</span><input id="bp-ewidth" type="range" min="16" max="24" step="1"><b id="bp-ewidth-v"></b></div>'
+      + '<div class="bp-row"><span>眼高</span><input id="bp-eheight" type="range" min="40" max="56" step="1"><b id="bp-eheight-v"></b></div>'
+      + '<div class="bp-row"><span>眼斜角</span><input id="bp-eangle" type="range" min="-15" max="15" step="1"><b id="bp-eangle-v"></b></div>'
       + '<div class="bp-row"><span>主题渐变</span><button class="bp-tog" data-k="grad" type="button"></button></div>'
       + '<div class="bp-row"><span>跟随鼠标</span><button class="bp-tog" data-k="follow" type="button"></button></div>'
       + '<div class="bp-row bp-actions"><button class="bp-btn" data-a="reset" type="button">恢复默认</button>'
