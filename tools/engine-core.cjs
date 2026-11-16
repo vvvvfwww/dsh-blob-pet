@@ -1,9 +1,10 @@
 /**
- * engine-core.cjs — grok-icon-study 引擎托管核心（两处复用）：
- *   1. DSH 插件宿主进程（lib/index.js）：node:vm 沙箱跑引擎，帧走 sidecar /frames
+ * engine-core.cjs — 形象引擎托管核心（两处复用）：
+ *   1. DSH 插件宿主进程（lib/index.js）：node:vm 全局隔离（非安全边界）跑引擎，帧走 sidecar /frames
  *   2. CLI（render-bridge.cjs）：独立进程模式，native-smoke 回归用
- * createEngine(root) → { ev, cmd, frame, state }
- * 引擎源码 web/grok/*.js 原样未改（来自 blessonism/grok-icon-study，致谢）。
+ * createEngine(root) → { ev, cmd, frame, dispose, state }
+ *   dispose()：清掉全部定时器与 rAF 队列（可重复调用）；插件卸载 / 热重载时调用
+ * 引擎源码在 web/grok/*.js。
  */
 const fs = require('fs')
 const path = require('path')
@@ -81,8 +82,33 @@ function createEngine(root, opts = {}) {
     return `<${el.tag}${a}>${kids}${el.textContent ? esc(el.textContent) : ''}</${el.tag}>`
   }
 
-  // ——— vm 沙箱：不污染宿主全局 ———
+  // ——— vm 全局隔离（非安全边界）：不污染宿主全局 ———
   const rafQ = []
+  // 定时器登记表：chain() 与引擎侧 setTimeout/setInterval 的句柄全记在这里，dispose() 一次清干净。
+  // 引擎拿到的不是宿主函数本身（见下面的 timerApi），句柄留在宿主，只按数字 id 交互。
+  const timers = new Map()
+  let timerSeq = 0
+  let disposed = false
+  function startTimer(fn, ms, repeat) {
+    const id = ++timerSeq
+    const fire = () => {
+      if (!repeat) timers.delete(id)
+      if (disposed) return
+      // 引擎侧定时器抛错不能带崩宿主进程：记录后吞掉，画面自愈交给 frame() 的 rAF 重泵
+      try { fn() } catch (err) {
+        try { process.stderr.write('TIMER_ERR ' + (err && err.message ? err.message : err) + '\n') } catch {}
+      }
+    }
+    timers.set(id, repeat ? setInterval(fire, ms) : setTimeout(fire, ms))
+    return id
+  }
+  function stopTimer(id) {
+    const h = timers.get(id)
+    if (h === undefined) return
+    timers.delete(id)
+    // 句柄可能是 Timeout 也可能是 Interval：两个都清一遍最稳（clearTimeout 对 Interval 同样生效）
+    try { clearTimeout(h); clearInterval(h) } catch {}
+  }
   const winStub = { addEventListener() {}, removeEventListener() {} }
   const docEl = mkEl('html'); bindInner(docEl)
   const bodyEl = mkEl('body'); bindInner(bodyEl)
@@ -102,9 +128,31 @@ function createEngine(root, opts = {}) {
     cancelAnimationFrame() {},
     getComputedStyle: () => ({ backgroundColor: 'rgb(255,255,255)' }),
     console: { log() {}, warn() {}, error() {}, info() {} },
-    setInterval, setTimeout, clearTimeout, clearInterval,
   }
-  vm.createContext(sandbox)
+  // 全局隔离，不是安全边界：codeGeneration 关掉字符串求值，堵住 eval / new Function 这类入口。
+  // 引擎实测不依赖动态代码生成（web/grok/*.js 里没有 eval / new Function），所以 strings:false 不损失能力；
+  // 若哪天引擎开始用字符串造函数，会在这里直接报 EvalError —— 那时再按需放开并记下取舍。
+  const ctx = vm.createContext(sandbox, { codeGeneration: { strings: false, wasm: false } })
+  // 定时器必须由上下文内的函数转交：直接把宿主 setTimeout 塞进 sandbox 时，
+  // setTimeout.constructor('return process')() 能拿回真 process（已实测）。
+  // 包一层后引擎只能按数字 id 用，宿主句柄不出宿主。注意：这只是关掉这一条已知路径，
+  // vm 本身仍不是安全边界（同进程、共享宿主对象原型链）。
+  const mkTimerApi = vm.runInContext(`(function (start, stop) {
+    return {
+      setTimeout: function (fn, ms) { return start(fn, ms, false) },
+      setInterval: function (fn, ms) { return start(fn, ms, true) },
+      clearTimeout: function (id) { stop(id) },
+      clearInterval: function (id) { stop(id) },
+    }
+  })`, ctx)
+  const timerApi = mkTimerApi(
+    (fn, ms, repeat) => startTimer(fn, ms, repeat),
+    (id) => stopTimer(id),
+  )
+  sandbox.setTimeout = timerApi.setTimeout
+  sandbox.setInterval = timerApi.setInterval
+  sandbox.clearTimeout = timerApi.clearTimeout
+  sandbox.clearInterval = timerApi.clearInterval
   for (const f of ENGINE_ORDER) {
     vm.runInContext(fs.readFileSync(path.join(root, 'web/grok', f), 'utf8'), sandbox, { filename: 'grok/' + f })
   }
@@ -203,7 +251,6 @@ function createEngine(root, opts = {}) {
 
   const S = { label: '', labelUntil: 0, napping: 0, lastTool: null, celebrateCount: 0, petSeq: 0, idleAt: Date.now() }
   function setLabel(t, ms) { S.label = t || ''; S.labelUntil = t ? Date.now() + (ms || 5000) : 0 }
-  const T = setTimeout
   function wakeIfNeeded() {
     if (!S.napping) return
     const wasDown = S.napping >= 2
@@ -226,9 +273,10 @@ function createEngine(root, opts = {}) {
     S.idleAt = Date.now(); S.napping = 0
   }
   function armIdle() { S.idleAt = Date.now() }
-  function chain(fn, ms) { return T(fn, ms) }
+  function chain(fn, ms) { return startTimer(fn, ms, false) }
 
   function ev(m) {
+    if (disposed) return
     switch (m && m.t) {
       case 'user':
         wakeIfNeeded()
@@ -326,7 +374,7 @@ function createEngine(root, opts = {}) {
   }
 
   function cmd(c) {
-    if (!c) return
+    if (!c || disposed) return
     if (c.cmd === 'pet') {
       petMood()
     } else if (c.cmd === 'show') {
@@ -347,9 +395,11 @@ function createEngine(root, opts = {}) {
       }
       armIdle()
     } else if (c.cmd === 'pointer' && c.nx != null) {
-      // 眼睛跟随：nx/ny ∈ [-1,1]，映射到 svg 局部坐标（假 DOM 的 rect 恒为 259×259）
-      const cx = 129.5 + Math.max(-1.6, Math.min(1.6, c.nx)) * 129.5
-      const cy = 129.5 + Math.max(-1.6, Math.min(1.6, c.ny)) * 129.5
+      // 眼睛跟随：nx/ny ∈ [-1,1] → svg 用户坐标。viewBox 是 -15 -15 259 259，引擎本地原点在 -15，
+      // 所以指针映射应是 -15 + (nx+1)/2*259 = 114.5 + nx*129.5
+      // （旧写法 129.5 + nx*129.5 把视线整体右/下偏了 15px）
+      const cx = 114.5 + Math.max(-1.6, Math.min(1.6, c.nx)) * 129.5
+      const cy = 114.5 + Math.max(-1.6, Math.min(1.6, c.ny)) * 129.5
       bot.pointerRaw = { x: cx, y: cy }
     } else if (c.cmd === 'scheme' && c.value !== scheme) {
       scheme = c.value
@@ -361,39 +411,62 @@ function createEngine(root, opts = {}) {
     }
   }
 
+  // 空闲链：90s onboarding 轮换 → 240s drowsy(1) → 360s sleeping(2) → 720s powering-down(3)
+  // 等级单调递增。旧写法四个分支都以 S.napping === 0 为前提：240s 把 napping 置 1 之后其余分支
+  // 永假，sleeping / powering-down 全是死代码（wasDown = S.napping >= 2 也永不为真）。
   function sleepTick(now) {
-    if (S.napping >= 4) return
     const idleFor = now - S.idleAt
     // 刚被摸头/交互过（3s 保护期）绝不进入睡眠链
     if (idleFor < 3000) { S.napping = 0; return }
-    if (S.napping === 0 && idleFor > 720000) { S.napping = 3; bot.setMode('hold'); bot.setState('powering-down', { resetEyes: false }); setLabel('', 0) }
-    else if (S.napping === 0 && idleFor > 360000) { S.napping = 2; bot.setMode('hold'); bot.setState('sleeping', { resetEyes: false }); setLabel('zZ', 0) }
-    else if (S.napping === 0 && idleFor > 240000) { S.napping = 1; bot.setMode('hold'); bot.setState('drowsy', { resetEyes: false }) }
-    else if (S.napping === 0 && idleFor > 90000 && bot.mode !== 'onboarding') bot.setMode('onboarding')
+    const level = idleFor > 720000 ? 3 : idleFor > 360000 ? 2 : idleFor > 240000 ? 1 : 0
+    if (level > S.napping) {
+      S.napping = level
+      bot.setMode('hold')
+      if (level === 3) { bot.setState('powering-down', { resetEyes: false }); setLabel('', 0) }
+      else if (level === 2) { bot.setState('sleeping', { resetEyes: false }); setLabel('zZ', 0) }
+      else bot.setState('drowsy', { resetEyes: false })
+      return
+    }
+    if (level === 0 && idleFor > 90000 && bot.mode !== 'onboarding') bot.setMode('onboarding')
   }
 
   function frame() {
     const now = Date.now()
-    sleepTick(now)
-    if (S.label && now > S.labelUntil) S.label = ''
-    // 先拷贝再清空：q 与 rafQ 若是同一数组，length=0 会把待执行帧一并清掉，
-    // 导致 _tick 只在构造时跑一次、眼睛不跟随指针（pointer 恒 0）。
-    const q = rafQ.slice(); rafQ.length = 0
-    for (const fn of q) {
-      try { fn(now) } catch (err) {
-        // 引擎 _tick 抛错 = rAF 链断 = 冻结。记录并重新泵帧自愈。
-        try { process.stderr.write('TICK_ERR ' + (err && err.message ? err.message : err) + '\n') } catch {}
-        try { rafQ.push((t) => bot._tick(t)) } catch {}
+    if (!disposed) {
+      sleepTick(now)
+      if (S.label && now > S.labelUntil) S.label = ''
+      // 先拷贝再清空：q 与 rafQ 若是同一数组，length=0 会把待执行帧一并清掉，
+      // 导致 _tick 只在构造时跑一次、眼睛不跟随指针（pointer 恒 0）。
+      const q = rafQ.slice(); rafQ.length = 0
+      for (const fn of q) {
+        try { fn(now) } catch (err) {
+          // 引擎 _tick 抛错 = rAF 链断 = 冻结。记录并重新泵帧自愈。
+          try { process.stderr.write('TICK_ERR ' + (err && err.message ? err.message : err) + '\n') } catch {}
+          try { rafQ.push((t) => bot._tick(t)) } catch {}
+        }
       }
     }
     const inner = svg.children.map((c) => ser(c, vars())).join('')
     const vbRaw = svg.getAttribute('viewBox') || '-15 -15 259 259'
     const p = vbRaw.split(/[\s,]+/).map(Number)
     const doc = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${p[0] - 45} ${p[1] - 70} ${p[2] + 90} ${p[3] + 95}">${inner}</svg>`
-    return { svg: doc, label: S.label, state: bot.state }
+    // labelMs：气泡剩余毫秒（无气泡为 0），给原生窗做淡出用。帧字段只增不改。
+    const labelMs = S.label ? Math.max(0, Math.round(S.labelUntil - now)) : 0
+    return { svg: doc, label: S.label, state: bot.state, labelMs }
   }
 
-  return { ev, cmd, frame, get state() { return bot.state } }
+  // 停掉这个实例的一切活动：定时器、rAF 队列、引擎内部 rAF 引用。可重复调用。
+  function dispose() {
+    if (disposed) return
+    disposed = true
+    for (const h of timers.values()) { try { clearTimeout(h); clearInterval(h) } catch {} }
+    timers.clear()
+    rafQ.length = 0
+    // 引擎自己的 rAF 句柄也断开，避免外部再 pump 到已废弃的实例
+    try { bot._raf = undefined } catch {}
+  }
+
+  return { ev, cmd, frame, dispose, get state() { return bot.state } }
 }
 
 module.exports = { createEngine, ENGINE_ORDER }

@@ -2,8 +2,12 @@
 const fs = require('fs')
 const http = require('http')
 const path = require('path')
+const os = require('os')
 
 process.env.BLOB_PET_TEST_PORT = '39217'
+// 与 lib/index.js:31 同一口径：DSH_HOME 优先，其次 os.homedir()/.dsh。
+// 以前写死 USERPROFILE || HOME，在 DSH_HOME 指向别处的机器上 token 永远对不上（/cmd 全 403）。
+const DSH_DIR = process.env.DSH_HOME || path.join(os.homedir(), '.dsh')
 
 function get(url, headers) {
   return new Promise((res) => {
@@ -26,7 +30,7 @@ function onceData(req, ms) {
 }
 
 ;(async () => {
-  const cfgPath = path.join(process.env.USERPROFILE || process.env.HOME, '.dsh', 'blob-pet.json')
+  const cfgPath = path.join(DSH_DIR, 'blob-pet.json')
   // 备份 live 宿主的 rendezvous，测完原样还回去（别把正在跑的 sidecar 的 port/token 擦了）
   const backup = fs.existsSync(cfgPath) ? fs.readFileSync(cfgPath) : null
   // 预设 cfg：钉测试端口；关掉自动开窗（别真拉起原生窗）；开 GUI 注入以测通道
@@ -95,7 +99,7 @@ function onceData(req, ms) {
   }
   const lookPost = await postLook({ size: 132, shape: 'egg', grad: true, ink: { from: '#061021', to: '#4f7fc4', angle: 0 } })
   let lookFile = {}
-  try { lookFile = JSON.parse(fs.readFileSync(process.env.BLOB_PET_LOOK_FILE || path.join(process.env.USERPROFILE || process.env.HOME, '.dsh', 'blob-pet-look.json'), 'utf8')) } catch {}
+  try { lookFile = JSON.parse(fs.readFileSync(process.env.BLOB_PET_LOOK_FILE || path.join(DSH_DIR, 'blob-pet-look.json'), 'utf8')) } catch {}
   console.log('GUI look POST:', lookPost.code, '| file shape:', lookFile.shape, 'size:', lookFile.size, '| ink:', lookFile.ink && lookFile.ink.from)
   const injectHtml = handlers.tapIndex('<html><body></body></html>')
   console.log('tapIndex injects:', injectHtml.includes('/blob-pet/pet.js'))
