@@ -99,6 +99,14 @@
       if (r >= t.length) break;
       if (i === "M") { o = rd(); l = rd(); c = o; u = l; s.push([o, l]); i = "L"; }
       else if (i === "L") { const f = rd(), h = rd(); m((y) => [o + (f - o) * y, l + (h - l) * y], Math.hypot(f - o, h - l)); o = f; l = h; }
+      else if (i === "Q") {
+        const f = rd(), h = rd(), y = rd(), k = rd(), v = o, b = l;
+        m((E) => {
+          const A = 1 - E;
+          return [A * A * v + 2 * A * E * f + E * E * y, A * A * b + 2 * A * E * h + E * E * k];
+        }, Math.hypot(f - o, h - l) + Math.hypot(y - f, k - h));
+        o = y; l = k;
+      }
       else if (i === "C") {
         const f = rd(), h = rd(), y = rd(), k = rd(), v = rd(), b = rd(), x = o, N = l;
         m((E) => {

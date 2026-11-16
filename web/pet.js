@@ -1,11 +1,9 @@
 /**
  * dsh-blob-pet — 前端宿主壳。
  *
- * 形象引擎完全使用 blessonism/grok-icon-study 的复刻实现（web/grok/ 八个文件：
- * geometry-data / math / tables / pose / tricks / fx / eyes / character）。
- * 几何数据、25 套眼睛、18 种身形、表情轮换表、弹簧参数、1200ms 登录轮换节奏
- * 全部来自该仓库，未做任何修改。感谢 blessonism 分享素材
- * （https://github.com/blessonism/grok-icon-study）。
+ * 形象引擎在 web/grok/（八个文件：geometry-data / math / tables / pose / tricks /
+ * fx / eyes / character）。几何数据（25 套眼睛 / 18 种身形 / 11 色）、表情轮换表、
+ * 弹簧参数、1200ms 登录轮换节奏分别在 geometry-data.js 与 tables.js 里。
  *
  * 本文件只做三件事（引擎脚本由宿主拼在本文件之前）：
  *   1. 建一个固定右下角的容器并 new GrokCharacter（blob / black / 登录页参数）；
@@ -107,8 +105,10 @@
   // ————— 样式与容器（GUI 页注入模式） —————
   const style = document.createElement('style')
   style.textContent = `
+  /* color-scheme 由 applySchemeVars 按探测到的深浅改写：引擎的 inkFg/inkCss 用 light-dark()
+     出墨色，light-dark() 只认 color-scheme，不认我们注入的 --bp-ink/--bp-paper */
   #blob-pet-root{position:fixed;right:26px;bottom:22px;z-index:2147483000;cursor:grab;
-    user-select:none;-webkit-user-select:none;touch-action:none;text-align:center}
+    user-select:none;-webkit-user-select:none;touch-action:none;text-align:center;color-scheme:light}
   #bp-label{display:block;font:600 11px/1.4 system-ui,sans-serif;color:var(--bp-ink,#17181c);
     background:var(--bp-paper,#fff);border:1px solid rgba(128,128,128,.35);padding:3px 9px;
     border-radius:10px;white-space:nowrap;opacity:0;transition:opacity .25s;pointer-events:none;
@@ -185,6 +185,8 @@
   }
   function applySchemeVars() {
     const dark = detectScheme() === 'dark'
+    // 让引擎里的 light-dark() 跟这里探测到的深浅一致（宿主页面不一定声明 color-scheme）
+    box.style.colorScheme = dark ? 'dark' : 'light'
     box.style.setProperty('--bp-ink', dark ? '#e9eaee' : '#17181c')
     box.style.setProperty('--bp-paper', dark ? '#232428' : '#ffffff')
     return dark ? 'dark' : 'light'
@@ -206,7 +208,7 @@
     if (typeof GrokCharacter !== 'function') return
     const scheme = applySchemeVars()
     const bot = new GrokCharacter(svg, {
-      // 登录页原参数（见 grok-icon-study README）：black / blob / loginWrap
+      // 固定参数：black / blob / loginWrap
       shape: shapeName,
       color: 'black',
       scheme,
@@ -554,7 +556,9 @@
         bot.setMode('onboarding')
         bot.setEmphasis(false)
         setLabel('', 0)
-        // 240s：犯困 drowsy → 360s sleeping → 720s powering-down（standby 特效）
+        // 犯困 drowsy → sleeping → powering-down（standby 特效）：240s / 360s / 720s 是
+        // 相对"最后一次活动"的绝对时长（4 / 6 / 12 分钟）；这里三个定时器挂在 90s 空闲定时器
+        // 里面，所以 150000 / 270000 / 630000 是相对 90s 之后的增量（+150s / +270s / +630s）
         drowsyTimer = setTimeout(() => { napping = 1; bot.setMode('hold'); bot.setState('drowsy', { resetEyes: false }) }, 150000)
         sleepTimer = setTimeout(() => { napping = 2; bot.setState('sleeping', { resetEyes: false }); setLabel('zZ', 0) }, 270000)
         standbyTimer = setTimeout(() => { napping = 3; bot.setState('powering-down', { resetEyes: false }); setLabel('', 0) }, 630000)

@@ -3,10 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DSH 桌宠动作图鉴 · grok-icon-study 引擎全状态</title>
+<title>DSH 桌宠动作图鉴 · 引擎全状态</title>
 <style>
-  :root{--fg:#16171a;--bg:#f4f2ee;--card:#fff;--line:rgba(0,0,0,.1);--dim:#8d877b;--acc:#1d9bf0}
-  html.dark{--fg:#e9eaee;--bg:#17181c;--card:#232428;--line:rgba(255,255,255,.12);--dim:#9aa0a6}
+  /* color-scheme 跟着 .dark 走：tables.js 的 inkFg/inkCss 用 light-dark() 出墨色，
+     light-dark() 只看 color-scheme，不看我们自己的 --fg/--bg 变量 */
+  :root{--fg:#16171a;--bg:#f4f2ee;--card:#fff;--line:rgba(0,0,0,.1);--dim:#8d877b;--acc:#1d9bf0;color-scheme:light}
+  html.dark{--fg:#e9eaee;--bg:#17181c;--card:#232428;--line:rgba(255,255,255,.12);--dim:#9aa0a6;color-scheme:dark}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,"Segoe UI",sans-serif}
   header{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);
@@ -64,7 +66,7 @@
 </div>
 
 <div id="tray"></div>
-<footer>引擎：<a href="https://github.com/blessonism/grok-icon-study">blessonism/grok-icon-study</a> 复刻实现（原样）· 感谢作者分享素材 · dsh-blob-pet</footer>
+<footer>dsh-blob-pet</footer>
 
 <script src="grok/geometry-data.js"></script>
 <script src="grok/math.js"></script>
@@ -92,6 +94,7 @@
   Object.keys(GEO.palette || {}).forEach(k => colorSel.appendChild(new Option(k, k)))
   shapeSel.value = 'blob'; if (!colorSel.querySelector('[value=black]')) colorSel.appendChild(new Option('black', 'black')); colorSel.value = 'black'
   let cellPx = 120
+  let paused = false   // 全暂停开关：大舞台与卡片共用（提到建卡之前，重建 tray 时不会撞 TDZ）
 
   // 大舞台
   const stageBot = new GrokCharacter(document.getElementById('stage-svg'), {
@@ -104,13 +107,61 @@
   })
 
   // 39 状态卡片（按他 GROUPS 的 4 组分组）
-  const bots = [stageBot]
+  // 40 条 rAF → 只驱动看得见的：卡片首次进入视口才构造 GrokCharacter，
+  // 离开视口一会儿后 setPaused(true)（引擎在 paused 且弹簧稳定时会自己停掉 rAF，不用改 character.js）。
+  const bots = [stageBot]      // 已构造的实例（大舞台 + 已醒来的卡片），配色/暂停都作用在这上面
   let cellBots = []
+  let cards = []               // 每张卡的元数据；换尺寸重建 tray 时整体重来
+  let cardIO = null
+  const CARD_MARGIN = '200px 0px'   // 提前 200px 构造，滚上来时不至于空一拍
+  const CARD_SLEEP_MS = 1500        // 离开视口 1.5s 后再停：来回滚不抖，久留才真的省 rAF
+
+  // 懒构造：身形/配色/深浅取"当下"下拉值 → 未构造的卡片构造时自然套用最新选择
+  function ensureCardBot(card) {
+    if (card.bot) return card.bot
+    const b = new GrokCharacter(card.svg, {
+      shape: shapeSel.value, color: colorSel.value, scheme: dark ? 'dark' : 'light',
+      mode: 'hold', state: card.state, loginWrap: true, followPointer: false, sizePx: cellPx, paused,
+    })
+    b.galleryState = card.state
+    b.galleryOffscreen = false
+    card.bot = b
+    cellBots.push(b); bots.push(b)
+    return b
+  }
+
+  // 视口观察：进 → 构造（或唤醒）；出 → 延时休眠
+  function observeCards(list) {
+    if (cardIO) { cardIO.disconnect(); cardIO = null }
+    if (typeof IntersectionObserver !== 'function') { list.forEach(ensureCardBot); return }   // 没有 IO 就退回全构造
+    cardIO = new IntersectionObserver((entries) => {
+      entries.forEach((en) => {
+        const card = en.target.__card
+        if (!card) return
+        clearTimeout(card.sleepTimer); card.sleepTimer = null
+        if (en.isIntersecting) {
+          card.offscreen = false
+          const b = ensureCardBot(card)
+          b.galleryOffscreen = false
+          b.setPaused(paused)
+        } else {
+          card.offscreen = true
+          if (card.bot) card.bot.galleryOffscreen = true
+          card.sleepTimer = setTimeout(() => { if (card.offscreen && card.bot) card.bot.setPaused(true) }, CARD_SLEEP_MS)
+        }
+      })
+    }, { root: null, rootMargin: CARD_MARGIN, threshold: 0 })
+    list.forEach((c) => { c.cell.__card = c; cardIO.observe(c.cell) })
+  }
+
   function buildTray() {
+    if (cardIO) { cardIO.disconnect(); cardIO = null }
+    cards.forEach(c => { clearTimeout(c.sleepTimer); c.sleepTimer = null })
     cellBots.forEach(b => { try { b.destroy() } catch {} })
     bots.length = 1 // 只留 stageBot
     tray.innerHTML = ''
     cellBots = []
+    cards = []
     META.groups.forEach(g => {
       const h = document.createElement('h2'); h.className = 'grp'; h.textContent = g.label; tray.appendChild(h)
       g.states.forEach(name => {
@@ -121,12 +172,8 @@
         const fx = document.createElement('div'); fx.className = 'fx'
         const ov = (META.overlays || {})[name]; if (ov) fx.textContent = '✦ ' + ov
         cell.appendChild(fx)
-        const b = new GrokCharacter(svg, {
-          shape: shapeSel.value, color: colorSel.value, scheme: dark ? 'dark' : 'light',
-          mode: 'hold', state: name, loginWrap: true, followPointer: false, sizePx: cellPx, paused: false,
-        })
-        b.galleryState = name
-        cellBots.push(b); bots.push(b)
+        const card = { cell, svg, state: name, bot: null, offscreen: true, sleepTimer: null }
+        cards.push(card)
         cell.onclick = () => {
           document.querySelectorAll('.cell.active').forEach(c => c.classList.remove('active'))
           cell.classList.add('active')
@@ -138,6 +185,7 @@
         tray.appendChild(cell)
       })
     })
+    observeCards(cards)
   }
   buildTray()
   document.getElementById('st-eyes').textContent = '点任意卡片开始'
@@ -146,7 +194,8 @@
     const sch = dark ? 'dark' : 'light'
     bots.forEach(b => { b.setColor(colorSel.value, sch) })
   }
-  shapeSel.onchange = () => cellBots.forEach(b => b.setShape(shapeSel.value))
+  // 换身形：大舞台 + 已构造的卡片都跟着换；未构造的卡片构造时读当前下拉值，自然跟上
+  shapeSel.onchange = () => bots.forEach(b => b.setShape(shapeSel.value))
   colorSel.onchange = syncScheme
   document.getElementById('size').onchange = (e) => { cellPx = Number(e.target.value); buildTray(); }
 
@@ -178,11 +227,11 @@
     step(); tourTimer = setInterval(step, 2800)
   }
 
-  // 全暂停/继续
-  let paused = false
+  // 全暂停/继续（paused 在建卡之前就声明了）
   document.getElementById('pause').onclick = (e) => {
     paused = !paused
-    bots.forEach(b => b.setPaused && b.setPaused(paused))
+    // 离屏卡片保持休眠，省得"全继续"把 39 条 rAF 一次性唤醒；滚回来时观察器按 paused 重新套
+    bots.forEach(b => { if (!b.galleryOffscreen) b.setPaused && b.setPaused(paused) })
     e.target.textContent = paused ? '▶ 全继续' : '⏸ 全暂停'
   }
 

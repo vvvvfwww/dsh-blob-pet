@@ -233,8 +233,9 @@
   }
 
   const EYE_HOME = { turn: 17, tilt: -14, roll: 29 };
+  // 单眼参数的兜底（缺字段时按原登录页尺寸补）；整体眼睛参数没有兜底——
+  // 没配 eyeTune 就不做自定义眼混合，见 customEyePolys。
   const DEFAULT_EYE = { width: 20, height: 50, size: 1, angle: 0, x: 0, y: -7 };
-  const DEFAULT_EYES = { left: DEFAULT_EYE, right: DEFAULT_EYE, spacing: 35 };
   const OVERLAY = 300;
   const OVERLAY_HALF = OVERLAY / 2;
   const FACE_R = 120;
@@ -358,11 +359,24 @@
     return out;
   }
 
+  // getTotalLength() 是同步触发布局的调用，每帧每只眼各来一次就是白扔的卡顿。
+  // 长度只取决于 path 的 d（transform 是仿射变换，不改变弧长），所以拿 d 字符串
+  // 当缓存 key：形状/换眼没变就直接复用，元素被换掉时 WeakMap 自己回收。
+  const LEN_CACHE = new WeakMap();
+
+  function cachedLength(el, key) {
+    const hit = key == null ? null : LEN_CACHE.get(el);
+    if (hit && hit.key === key) return hit.len;
+    const len = el.getTotalLength();
+    if (key != null) LEN_CACHE.set(el, { key, len });
+    return len;
+  }
+
   function sampleEl(el, n) {
     if (!el || typeof el.getTotalLength !== "function") return null;
     let len = 0;
     try {
-      len = el.getTotalLength();
+      len = cachedLength(el, el.getAttribute ? el.getAttribute("d") : null);
     } catch {
       return null;
     }
@@ -375,15 +389,23 @@
     return pts;
   }
 
-  function customEyePolys({ pose, eyes, svg, n = 48, home = EYE_HOME, rim }) {
+  function customEyePolys({ pose, eyes, svg, n = 48, home = EYE_HOME, rim, lid }) {
     if (!svg || !pose) return null;
-    const src = eyes || DEFAULT_EYES;
+    // 没配 eyeTune 时不要回落到默认尺寸的假定眼——那等于拿一个固定大小的眼
+    // 盖住真眼。返回 null 让调用方跳过混合，保留 paintEyes 画的当前 pose 眼。
+    if (!eyes) return null;
+    const src = eyes;
+    // 眨眼/眯眼时眼形跟着压扁；lid 可以是一个系数，也可以按左右眼各给一个（单眼眨）
+    const openAt = (i) => {
+      const v = Array.isArray(lid) ? lid[i] : lid;
+      return v == null ? 1 : clamp(v, 0.04, 1.5);
+    };
     const sides = ["left", "right"];
-    return sides.map((side) => {
+    return sides.map((side, i) => {
       const tune = { ...DEFAULT_EYE, ...(src[side] || {}) };
       const faceX = (side === "left" ? -1 : 1) * clamp(src.spacing ?? 35, 0, 150) / 2 + tune.x;
       const faceY = tune.y;
-      const local = roundedRect(Math.max(tune.width, 1), Math.max(tune.height, 1));
+      const local = roundedRect(Math.max(tune.width, 1), Math.max(tune.height * openAt(i), 1));
       let z = 0;
       const projected = local.map(([lx, ly]) => {
         const p = projectEye(pose, home, faceX, faceY, lx, ly, tune.angle, rim);
@@ -399,10 +421,10 @@
   const VIS_HIDE = -0.006;
   const VIS_SHOW = 0.004;
 
-  function blendCustomEyes({ eyeEls, pose, eyes, svg, mix, n = 48, rim }) {
+  function blendCustomEyes({ eyeEls, pose, eyes, svg, mix, n = 48, rim, lid }) {
     const k = clamp(mix, 0, 1);
     if (k <= 0.002 || !eyeEls) return;
-    const custom = customEyePolys({ pose, eyes, svg, n, rim });
+    const custom = customEyePolys({ pose, eyes, svg, n, rim, lid });
     if (!custom) return;
     const gate = 0.22;
     const shapeK = k >= gate ? 1 : Dke(k / gate);
@@ -420,5 +442,5 @@
     }
   }
 
-  g.GROK_EYES = { queueBlink, consumeBlink, paintEyes, lerpPoly, sampleEl, customEyePolys, blendCustomEyes };
+  g.GROK_EYES = { queueBlink, consumeBlink, paintEyes, lerpPoly, sampleEl, customEyePolys, blendCustomEyes, winkLid };
 })(window);

@@ -37,7 +37,11 @@
   class GrokCharacter {
     constructor(svg, opts = {}) {
       this.svg = svg;
-      this.shapeName = opts.shape || "blob";
+      this.geo = opts.geo || g.GROK_GEO;
+      // 构造期就校验形状名：非法名静默回落到默认 blob，跟 setShape 的守卫同一套语义。
+      // 不抛错是为了不破坏现有调用点（gallery 的形状下拉、宿主传参都可能写错名）。
+      // 用 path 判定而不是查键，顺带挡住 'toString'/'__proto__' 这类原型键。
+      this.shapeName = this.geo.shapes?.[opts.shape]?.path ? opts.shape : "blob";
       this.colorId = opts.color || "black";
       this.scheme = opts.scheme || "light";
       this.mode = opts.mode || "hold";
@@ -78,7 +82,6 @@
       this.eyeColor = opts.eyeColor || null;
       this.inkFlat = opts.inkFlat || null;
       this.inkGrad = opts.inkGrad || null;
-      this.geo = opts.geo || g.GROK_GEO;
       this.playlists = opts.playlist || EYE_PLAYLIST;
 
       this.spin = spring(0);
@@ -145,7 +148,9 @@
       this.ovRest = false;
       this.ovRestAt = 0;
       this.pxW = opts.sizePx || 190;
-      this.keepBody = !!opts.keepBody;
+      // 默认保住身体：overlay（loading/humming 等）激活时 bodyW 不再缩成 1-yl，
+      // 忘了传 keepBody 也不会把身体缩成一个小黑点。显式传 false 仍然生效。
+      this.keepBody = opts.keepBody ?? true;
       this.pxAt = 0;
       this.partScale = 1;
       this.celebrateAt = -1;
@@ -170,7 +175,7 @@
         const slot = list.indexOf(id);
         this.eyeIdx = slot >= 0 ? slot : 0;
       }
-      if (!this.driven) this._bindPointer();
+      this._syncPointer();
       if (this.frozen) {
         this.holdFrame();
       } else if (this.driven) {
@@ -262,6 +267,7 @@
         this.pointerRaw = null;
         this.gazeTarget = null;
       }
+      this._syncPointer();
     }
 
     setPose(next) {
@@ -764,7 +770,17 @@
       }
     }
 
+    // 按需挂全局监听：gallery 一屏 78 个实例里绝大多数 followPointer=false，
+    // 以前每个实例都挂着 pointermove/pointerleave，每次移动都空跑一遍闭包。
+    _syncPointer() {
+      const want = this.followPointer && !this.driven;
+      if (want === !!this._onMove) return;
+      if (want) this._bindPointer();
+      else this._unbindPointer();
+    }
+
     _bindPointer() {
+      if (this._onMove) return;
       this._onMove = (e) => {
         if (!this.followPointer) return;
         this.pointerRaw = { x: e.clientX, y: e.clientY };
@@ -777,8 +793,11 @@
     }
 
     _unbindPointer() {
+      if (!this._onMove) return;
       window.removeEventListener("pointermove", this._onMove);
       document.documentElement.removeEventListener("pointerleave", this._onLeave);
+      this._onMove = null;
+      this._onLeave = null;
     }
 
     _build() {
@@ -1136,7 +1155,8 @@
         this.winkUntil = now + rand(4500, 10000);
       }
 
-      this.emphasisBlend += ((this.emphasis ? 1 : 0) - this.emphasisBlend) * Rn(0.12);
+      // 平滑系数按真实帧间隔算（clamp 掉卡顿帧）：固定 1/60 在 120Hz 屏上会让收敛快一倍。
+      this.emphasisBlend += ((this.emphasis ? 1 : 0) - this.emphasisBlend) * Rn(0.12, Math.min(dt, 0.05));
 
       if (this.emphasis && !this.manualHold) {
         this.eyeScale.t = Math.max(this.eyeScale.t, 1.32);
@@ -1419,6 +1439,11 @@
           svg: this.svg,
           mix: holdMix,
           rim,
+          // 自定义眼也要跟着眨：跟 paintEyes 用同一套 winkLid，左右眼各算开合（单眼眨也对得上）
+          lid: [
+            EY.winkLid(this.blink.x, now, this.winkAt, this.winkEye, 0),
+            EY.winkLid(this.blink.x, now, this.winkAt, this.winkEye, 1),
+          ],
         });
       }
 
