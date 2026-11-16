@@ -2,6 +2,8 @@
 node_modules/
 pet-input.log
 *.log
+__pycache__/
+*.pyc
 
 # 桌宠窗状态与 rendezvous（宿主运行时生成）
 .dsh/

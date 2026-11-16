@@ -19,20 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
---------------------------------------------------------------------------
-
-## 关于 web/grok/ 引擎数据（重要 — 不适用上述 MIT）
-
-`web/grok/` 目录下的几何数据、形状路径、眼睛多边形与表情数据 **提取自 xAI
-Grok Bot 应用包（app.asar）**，版权归 **xAI / 相应权利人所有**，**不适用**
-上面的 MIT 许可。
-
-这些内容：
-- 仅限**个人学习研究**使用；
-- **不得**商用、**不得**再分发、**不得**作为原创素材发布；
-- 本仓库将引擎数据一并上传，仅为个人本地使用留档，**不代表授权公开分发**。
-
-任何再分发、二次发布或商用前，必须把 `web/grok/` 整体替换回原创绘制的数据。
-引擎外壳代码（character.js / pose.js / fx.js 等对提取数据的编排逻辑）与本插件
-其余部分（lib/ tools/）为原创，适用上述 MIT。

@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.9.0（2026-11-16）— 修滚轮缩放、睡眠链自锁、sidecar 断连与一批审计问题
+- **`LICENSE` 只留标准 MIT 正文**：`web/grok/` 的附加条款整段删除（连分隔线和标题）。
+- **文档按实测校对**（错的是文档就改文档，不改代码）：
+  - 状态数「39 态」→ `GROUPS` 39 + 运行期注入 `singing`/`dancing`/`giggle` 3 = **42 个能被
+    `setState` 列出的状态**；本插件映射其中 38 个，`surprised`/`angry`/`curious`/`notifying` 未接。
+  - overlay「15 种、用到 12 种」→ **定义 14 种、全部用到**；`paint()` 只派发 12 个绘制器，
+    `ball`/`whirl` 只通过 `extras()` 驱动物理。
+  - 空闲睡眠链「4/5/12 分钟」→ **4 / 6 / 12 分钟**（`web/pet.js` 的 150s / 270s / 630s 叠在 90s 空转之上）。
+  - 「无订阅者时引擎循环自动停摆」→ 停摆判断在 `lib/index.js` 的 `ensureEngineLoop()`
+    （16ms `setInterval`，`subs.size === 0` 直接 return）；`engine-core` 本身是拉模式，没有循环可停。
+  - 「16ms 推一帧」→ `engine-core` 是拉模式（调用方调 `frame()` 取帧），只有独立进程壳
+    `tools/render-bridge.cjs` 里有 `setInterval(frame, 16)`。
+  - 「除 keepBody 外引擎未做修改」→ 不成立，如实列出 `engine-core.cjs` 的运行期注入：
+    `EYE_PLAYLIST`/`EYE_HOLD_MS`/`BLINK_MS` 补 `singing`/`dancing`/`giggle`、overlay MAP 补
+    `singing→wave`/`dancing→orbit`、`GROUPS` 推进 Reactions 组（16 → 19）。
+  - 序列化成本「~0.15ms/帧」→ 本机实测 `render-bridge --bench` **0.22–0.23 ms/帧**，按 8ms 节拍
+    推进（弹簧真的在动）时 `engine-core.frame()` **平均 0.61 ms / 中位 0.58 / p95 1.05**
+    （Windows / node v24.20.0 / 空闲状态）；`--bench` 那个数是空载紧循环，弹簧不动、`Date.now()`
+    几乎不前进，测的是"没干活"的序列化成本，机器一忙就翻倍，不是基线。
+  - `tools/native-smoke.cjs` 重写成五段真链路：`engine-core` 进程内建引擎灌事件拉帧（查
+    `labelMs`/`state`/`dispose()` 幂等）→ `render-bridge` 薄壳行协议 → QtSvg 逐状态解析并抽像素
+    → 离屏 `PetWindow`（滚轮 `angleDelta`/`pixelDelta`、点击穿透 mask 开合）→ `pet-native.py` AST。
+    全程 `QT_QPA_PLATFORM=offscreen` + 临时 `DSH_HOME`，不弹窗、不改真实配置。
+- 修滚轮缩放：PySide6 6.12 的 `QWheelEvent` 没有 `angle()`（Qt5 残影），只认 `angleDelta()`；
+  触摸板常常只给 `pixelDelta()`。两条路都接上，滚轮调窗口尺寸恢复。
+- 修睡眠链自锁：`engine-core.cjs` 的 `sleepTick` 四条分支都以 `S.napping === 0` 为前提，
+  240s 把 `napping` 置 1 之后其余分支永远为假 → `sleeping`/`powering-down` 曾是死代码，
+  `wasDown = S.napping >= 2` 也永不为真。改成按 idle 时长算等级（>240s / >360s / >720s）且只单向递增。
+- 修视线偏移：`cmd({cmd:'pointer'})` 把 nx/ny 映射到 SVG 用户坐标时漏掉 viewBox 原点 `-15`，
+  视线整体偏右下 15px；改成 `114.5 + nx*129.5`。
+- sidecar 断开不再退出窗口：`pet-native.py` 取 `/frames` 失败只按退避重试，宿主重启后窗自动接回，
+  不再连带把窗口关掉。
+- `flattenPath` 补二次贝塞尔 `Q` 分支（`C` 分支留原样，采样步长按控制多边形总长走）：
+  楔子等 4 种身形的轮廓靠铅笔 overlay 绕身形描边，缺 `Q` 时会退化成折线/断线，现在恢复。
+- `tools/render-bridge.cjs` 合并成 `engine-core` 的薄壳：引擎与「事件 → 状态」映射只留一份
+  （原先两份实现，各修各的，已经漂移过），壳只做 stdin/stdout 的 JSON 行转接，`--bench` 也复用同一个 `frame()`。
+- `engine-core` 增 `dispose()`：`timers` Map 统一登记 `setTimeout`/`setInterval`，
+  宿主重载或关闭时一次清干净，不再残留定时器。
+- vm 取消字符串代码生成：`vm.createContext(sandbox, {codeGeneration:{strings:false, wasm:false}})`，
+  并把 `setTimeout`/`setInterval`/`clearTimeout`/`clearInterval` 换成上下文内函数转交，
+  堵掉 `setTimeout.constructor('return process')()` 这类逃逸。
+- `/frames` 每帧带 `labelMs`（气泡剩余毫秒）：原生壳不再自己猜时长，`BUBBLE_MS_DEFAULT = 5000` 只兜底。
+- 点击穿透：透明区域不再吃鼠标事件（`setMask(QRegion(...))` 只留角色外框，气泡/拖拽/弹跳时放开到整窗；
+  状态没变不反复 `setMask`）。
+- 日志脱敏与轮转：`redact_token()` 让 token 只留前 4 位，`_rotate_log()` 按大小轮转。
+- 队列上限：帧/事件队列改成 `queue.Queue(maxsize=...)`，宿主卡住时丢旧帧而不是无限吃内存（并记一条日志）。
+- `SVG_AR` 首帧起按真实 viewBox 解析（默认 354/349 兜底），不再假定固定宽高比。
+- 眼睛混合补 `lid`：自定义眼（`customEyePolys`）也接 `lid`（`open = lid == null ? 1 : clamp(lid, 0.04, 1.5)`），
+  持眼 / 手动模式下眼睛也会眨；`LEN_CACHE`（WeakMap）缓存 `getTotalLength()`，去掉每帧重算。
+- `keepBody` 默认开启（`opts.keepBody ?? true`）：overlay 激活时身体不再缩成小黑点，显式传 `false` 仍然生效。
+- `gallery` 懒初始化：`IntersectionObserver` 进视口才构造 `GrokCharacter`（提前 200px），
+  离开视口 1.5s 后 `setPaused(true)`——78 个实例的 rAF 不再同时空跑；`character.js` 顺带把
+  `pointermove` 监听改成按需挂/摘（`_syncPointer()`），并修 `color-scheme`，让 `light-dark()` 墨色跟着深浅色走。
+- `tools/host-test.cjs` 跟着 `lib/index.js` 的口径走 `process.env.DSH_HOME || os.homedir()/.dsh`：
+  在 `DSH_HOME` 指向别处的机器上不再 token 对不上（`/cmd` 全 403、`tapIndex` 不注入、实测 exit 1）。
+
 ## 0.8.9（2026-11-13）— 眼睛大小放宽到 60–150%
 - 0.8.7 把眼大小卡在 75–105%，理由是「再大就变细线」。根因是引擎的宽度上限
   `Hee = Math.min(Hee0*tuneW*tuneS, _ee/pulse)`，而 `_ee = clamp((l1-pre)/(a1+o1), 0.35, 4)`
@@ -11,8 +67,6 @@
 - 实测（190px、blob 与 egg）：默认 / 110% / 130% / 150% 逐级变大且比例正常；
   150% 时右眼贴近剪影边缘仍可见；间距 > 48 才会被裁，故上限取 46。
 - 面板提示改成「放大时眼距会自动跟着拉开」。
-- 文档：README / package.json / 模块头注释里的「版权边界 / 仅个人学习 / 勿再分发」说明
-  换成「🙏 致谢」，附引擎来源 <https://github.com/blessonism/grok-icon-study>（已获作者许可使用素材）。
 
 ## 0.8.8（2026-11-13）— 面板外观同步到原生桌面窗
 - 以前面板只管网页团子，原生窗永远固定 `blob` + 默认渐变。现在两边共用一份外观：
@@ -131,7 +185,7 @@
   「藏起来」置 display:none；全程无 JS 报错；smoke / native-smoke / host-test 全绿。
 - VERSION bump 0.7.0 → 0.8.0。
 
-## 0.7.0（2026-11-12）— 引擎跟进 grok-icon-study web 分支 + 三样加料
+## 0.7.0（2026-11-12）— 引擎跟进 web 分支 + 三样加料
 - 引擎整体升级到上游 `web` 分支（d764946，15 个提交）：character.js 857→1446 行、
   eyes.js 218→424、pose.js 409→411、tables.js +1、fx.js +1（math/tricks/geometry-data 逐字节未变，
   25 眼 / 18 身形 / 11 色 / 39 状态表原样）。
@@ -169,7 +223,7 @@
 - host-test.cjs：sidecar /events SSE 断言改为「应 404」（路由已删）。
 - VERSION bump lib/index.js 0.5.0 → 0.6.1。
 
-## 0.6.0（2026-11-10）— 团子升级（移植自 grok-icon-study 复刻）
+## 0.6.0（2026-11-10）— 团子升级（引擎整体重写）
 - 新状态三连：singing（唱歌摇摆）/ dancing（跳舞自转）/ giggle（咯咯抖动），
   事件驱动：turn-end 后 40% 概率唱歌或跳舞（约 2.6s），user 来消息后 30% 概率咯咯笑（约 1.9s），
   清醒摸头 25% 概率接咯咯笑；注册走 GROK_TABLES（EYE_PLAYLIST/EYE_HOLD_MS/BLINK_MS），
@@ -178,7 +232,7 @@
   小黑点——overlay 设计是"身体缩成粒子环、粒子接管画面"，但浏览器粒子序列化后不可见。
   新增 keepBody 选项（character.js）：桌宠两端传 keepBody:true，overlay 激活时身体保持满幅。
   验证：singing/dancing/thinking 主组 scale≈1.0，native-smoke 148 帧全状态回归过，
-  bench 0.15ms/帧 与基线持平。
+  bench 0.15ms/帧 与基线持平（该数是空载紧循环里测的，真实成本见 0.9.0 条目）。
 - web/grok/pose.js 同步 singing/dancing/giggle 三个 pose case。
 
 ## 0.5.0（2026-11-09）
