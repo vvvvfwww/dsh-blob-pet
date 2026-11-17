@@ -148,9 +148,10 @@
       this.ovRest = false;
       this.ovRestAt = 0;
       this.pxW = opts.sizePx || 190;
-      // 默认保住身体：overlay（loading/humming 等）激活时 bodyW 不再缩成 1-yl，
-      // 忘了传 keepBody 也不会把身体缩成一个小黑点。显式传 false 仍然生效。
-      this.keepBody = opts.keepBody ?? true;
+      // keepBody 只给"没有浏览器渲染"的宿主用（tools/engine-core.cjs 的 QtSvg 桥会显式传
+      // true：那里粒子序列化后不可见，身体一缩就只剩一个黑点）。浏览器里必须保持上游默认
+      // false——overlay 特效画在身体之下，靠 bodyW = 1 - yl 把身体收掉才露得出来。
+      this.keepBody = !!opts.keepBody;
       this.pxAt = 0;
       this.partScale = 1;
       this.celebrateAt = -1;

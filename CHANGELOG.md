@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.1（2026-11-17）— 修 0.9.0 引入的 `keepBody` 默认值（图鉴特效态全变黑盘）
+- **现象**：图鉴（`web/gallery.html`，39 张卡）和网页团子里，凡是 overlay 特效状态——
+  `thinking` / `progress` / `radar` / `orbit` / `writing` / `alerting` / `uploading` /
+  `loading` / `powering-down` 等——都变成一颗纯黑圆盘，连眼睛都没有。
+- **根因**：0.9.0 把 `web/grok/character.js` 的 `this.keepBody = !!opts.keepBody`（上游默认
+  **false**）改成了 `opts.keepBody ?? true`。overlay 特效（dots / rings / parts / glyphs）
+  是插在 `bodyGroup` **之前**的，被不透明的身体挡着；浏览器里正是靠 `bodyW = 1 - yl` 把身体
+  随特效强度（`yl = overlay.x`）缩掉才露出特效。`keepBody = true` 让身体永远满幅
+  （`bodyW = 1`、`wre = 0`），特效全被盖住；同时 `eyes.js` 在 `overlayX >= 0.5` 时按设计收起
+  眼睛，于是成了"黑盘无眼"。
+- **修复**：恢复上游语义 `this.keepBody = !!opts.keepBody;`。唯一需要 `keepBody: true` 的宿主
+  是 `tools/engine-core.cjs`（QtSvg 桥：粒子序列化后不可见，身体一缩就只剩黑点），它本来就
+  显式传了 `keepBody: true`；`web/gallery.html`、`web/pet.js`、`tools/smoke.cjs` 都不传。
+- **验证**：用 `driven` 模式确定性步进（`b.step(1/60)`，browser headless 加
+  `--virtual-time-budget` 只会跑一帧 rAF，截出来的都是"第一帧快照"，不能当证据）逐格重截
+  39 态 × 明暗两套，并与上游 `a51f2eb` 引擎同参对照——逐格一致，只差动画相位。
+  `smoke` / `native-smoke` / `host-test` 全绿（QtSvg 侧帧协议与 mask 未受影响）。
+
 ## 0.9.0（2026-11-16）— 修滚轮缩放、睡眠链自锁、sidecar 断连与一批审计问题
 - **`LICENSE` 只留标准 MIT 正文**：`web/grok/` 的附加条款整段删除（连分隔线和标题）。
 - **文档按实测校对**（错的是文档就改文档，不改代码）：

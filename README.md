@@ -58,8 +58,10 @@ send / receive / dock / ball / whirl / pencil / bang / standby），且 **14 种
   所以只改引擎文件也会热重载）。
 - 团子对引擎的改动有**两处**：
   - `character.js` 的 `keepBody`（`bodyW = 1`、`wre = 0`）——overlay 状态会把身体缩成粒子环
-    （`bodyW = 1 - yl` → scale≈0.14），QtSvg 序列化后粒子不渲染，团子会塌成小黑点。0.9.0 起
-    `engine-core.cjs` 建引擎时默认带 `keepBody: true`，不用调用方再传。
+    （`bodyW = 1 - yl` → scale≈0.14），QtSvg 序列化后粒子不渲染，团子会塌成小黑点。只有
+    `tools/engine-core.cjs` 建引擎时显式传 `keepBody: true`；浏览器侧（图鉴页、网页团子）不传，
+    保持上游默认 `false`——overlay 特效画在身体之下，靠 `bodyW = 1 - yl` 把身体收掉才露得出来。
+    0.9.0 曾把默认值翻成 `true`，结果图鉴里所有特效态都变成纯黑圆盘，0.9.1 改回。
   - `tools/engine-core.cjs` 的**运行期注入**（不改 `web/grok/*.js` 源码）：给 `GROK_TABLES` 的
     `EYE_PLAYLIST` / `EYE_HOLD_MS` / `BLINK_MS` 补 `singing`（眼 2/11/17/19/8）、
     `dancing`（17/21/2/8）、`giggle`（11/2/17）三个状态；给 `GROK_FX.MAP` 补
@@ -141,7 +143,7 @@ DSH 宿主（引擎 + 42 态状态机，/frames NDJSON 60fps）──▶ tools/p
 
 面板项全部与原生桌面窗共用一份外观文件（见下），面板改完不用重启。
 
-- 面板标题右侧是**版本徽标**（`团子设置 v0.9.0`）：浏览器脚本不会自己热更，改完必须 `Ctrl+Shift+R`，
+- 面板标题右侧是**版本徽标**（`团子设置 v0.9.1`）：浏览器脚本不会自己热更，改完必须 `Ctrl+Shift+R`，
   徽标就是确认加载到哪一版的锚。
 - 面板内所有指针事件都 `stopPropagation`：点滑杆/取色器不会触发团子的摸头或拖拽（早期版本会被
   `setPointerCapture` 抢走指针，滑杆只能点不能拖）。
