@@ -170,7 +170,7 @@ DSH 宿主（引擎 + 42 态状态机，/frames NDJSON 60fps）──▶ tools/p
 node tools/smoke.cjs        # 引擎冒烟：GROUPS 里 39 个状态 + tricks API
 node tools/host-test.cjs    # 宿主链路：假 ctx → GUI 路由/sidecar/SSE/token 栅栏
 node tools/native-smoke.cjs # 端到端无头回归：engine-core → render-bridge 逐帧 SVG + QtSvg 渲染像素校验
-node tools/render-bridge.cjs --bench  # 序列化性能基准（本机实测约 0.5ms/帧，见下）
+node tools/render-bridge.cjs --bench  # 序列化性能基准（本机实测约 0.22ms/帧，见下）
 ```
 
 `tools/native-smoke.cjs` 在本机（Windows + PySide6 6.12）可以完整跑通，五段：`engine-core`
@@ -186,3 +186,15 @@ QtSvg 逐状态解析并抽像素（每帧必须画出非空内容）→ 离屏 
 **平均 0.61 ms、中位 0.58 ms、p95 1.05 ms**。
 注意 `--bench` 那个数是空载紧循环：`Date.now()` 几乎不前进、弹簧不动，测的是"没干活"的
 序列化成本，别当基线；机器忙的时候这个数会翻倍，两台机器之间也没有可比性。
+
+## 离线单文件版（不装 DSH 也能看）
+
+```bash
+node tools/build-offline.cjs                       # -> dist/gallery-offline.html
+node tools/build-offline.cjs D:/somewhere/x.html   # 指定输出路径
+```
+
+把 `web/gallery.html` 与 `web/grok/` 的 8 个引擎脚本内联成一个自足的 HTML（约 230 KB），
+双击即可打开：39 态全部会动，身形/配色/尺寸/深浅、tricks 按钮、自动巡演都在。
+没有任何 `<script src>`、`<link>`、`fetch`，断网、U 盘、换机器都能跑，只需要一个支持
+`light-dark()` 与 `color-mix()` 的现代 Chromium。`dist/` 不入库（构建产物）。
